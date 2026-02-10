@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>The Appropriation Cellophane</title>
+  <style>
+    :root{
+      --bg:#fff;
+      --green:#09FF00;
+      --ink:#111;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    }
+    body{ margin:0; background:var(--bg); color:var(--ink); }
+    .wrap{
+      width:min(920px, 92vw);
+      margin:0 auto;
+      padding:44px 16px 160px;
+    }
+    header{
+      position: sticky; top: 0; z-index: 3;
+      background: rgba(255,255,255,.86);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(0,0,0,.08);
+      padding: 10px 0 12px;
+    }
+    header h1{ margin:0; font-family:var(--sans); font-size:18px; font-weight:700; }
+    header p{ margin:6px 0 0; font-size:13px; opacity:.72; }
+
+    #content{
+      margin-top: 16px;
+      font-family: var(--mono);
+      font-size: 16px;
+      line-height: 1.9;
+      white-space: pre-wrap;
+      word-break: keep-all;
+    }
+
+    .sent{ display:inline; padding:2px 0; border-radius:8px; }
+    .appropriated{
+      color: var(--green);
+      text-shadow: 0 0 10px rgba(9,255,0,.18);
+    }
+    .appropriated .orig{ opacity:.33; color: rgba(0,0,0,.55); text-shadow:none; }
+    .appropriated .trans{ font-weight:700; }
+
+    /* 우하단 네모 버튼 */
+    #swatch{
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      border: 1px solid rgba(0,0,0,.14);
+      background: rgba(255,255,255,.9);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 30px rgba(0,0,0,.12);
+      cursor: pointer;
+      z-index: 9999;
+      display:grid;
+      place-items:center;
+      user-select:none;
+    }
+    #swatch .inner{
+      width: 16px; height: 16px;
+      border-radius: 6px;
+      background: var(--green);
+      opacity: .9;
+      box-shadow: 0 0 16px rgba(9,255,0,.25);
+    }
+
+    /* 셀로판(필름) */
+    #film{
+      position: fixed;
+      right: 22px;
+      bottom: 76px;
+      width: 54px;
+      height: 54px;
+      border-radius: 14px;
+      border: 1px solid rgba(9,255,0,.35);
+      background: rgba(9,255,0,.07);
+      backdrop-filter: blur(2px) saturate(120%);
+      box-shadow: 0 12px 40px rgba(0,0,0,.18);
+      z-index: 9998;
+      transform-origin: 100% 100%;
+      transform: scale(0.2);
+      opacity: 0;
+      pointer-events: none;
+      transition: transform .22s ease, opacity .22s ease;
+      overflow: hidden;
+    }
+    body.filmOn #film{
+      transform: scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    /* 커졌을 때 사이즈 */
+    body.filmOn #film{
+      width: min(520px, 86vw);
+      height: min(360px, 52vh);
+      right: 18px;
+      bottom: 76px;
+    }
+
+    /* 드래그 핸들 */
+    #filmHeader{
+      height: 34px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 0 10px;
+      font-family: var(--sans);
+      font-size: 12px;
+      letter-spacing: .06em;
+      color: rgba(0,0,0,.55);
+      border-bottom: 1px solid rgba(9,255,0,.18);
+      background: rgba(255,255,255,.55);
+      cursor: grab;
+      user-select:none;
+    }
+    #filmHeader:active{ cursor: grabbing; }
+    #filmHeader .badge{
+      font-weight:700;
+      color: rgba(9,255,0,.95);
+      text-shadow: 0 0 10px rgba(9,255,0,.18);
+    }
+    #closeFilm{
+      border: none;
+      background: transparent;
+      cursor:pointer;
+      font-size: 16px;
+      line-height: 1;
+      opacity:.55;
+    }
+
+    #filmBody{
+      height: calc(100% - 34px);
+      padding: 10px;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.5;
+      color: rgba(0,0,0,.6);
+    }
+    #filmBody .help{
+      margin:0;
+    }
+    #filmBody code{ color: rgba(9,255,0,.95); }
+
+    @media (prefers-reduced-motion: reduce){
+      #film{ transition:none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>전유된 대화: 내 욕망으로 번역되는 타자의 목소리</h1>
+      <p>우측 하단 네모를 눌러 ‘셀로판 필름’을 펼치고, 필름을 움직이면 그 안에 들어온 문장만 강제 번역됩니다.</p>
+    </header>
+
+    <div id="content"></div>
+  </div>
+
+  <div id="swatch" aria-label="Open cellophane">
+    <div class="inner"></div>
+  </div>
+
+  <div id="film" role="dialog" aria-label="Appropriation film">
+    <div id="filmHeader">
+      <span class="badge">APPROPRIATION FILM</span>
+      <button id="closeFilm" aria-label="Close">×</button>
+    </div>
+    <div id="filmBody">
+      <p class="help">
+        필름을 <b>드래그</b>해서 텍스트 위로 가져가면<br/>
+        그 영역의 문장이 <code>Product / Asset / Profit</code> 언어로 바뀝니다.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const TEXT = `
+Then they discovered the beauty of merchandise and started making it relentlessly.
+After a time, there was so much merchandise that they had to build new houses to shelter and distribute it everywhere.
+Once these stone houses had proliferated, they connected them to each other with tangled paths and gave them the name "city."
+This is how little by little the forest disappeared from their land along with the game that inhabited it.
+
+(여기에 네 원문을 길게 붙여 넣어도 됩니다. 줄바꿈 두 번은 문단으로 처리돼요.)
+`.trim();
+
+    // 강제 번역 사전 (원하면 더 세게/더 정확히 다듬어줄게)
+    const DICT = [
+      { re: /\bforest\b/gi, to: "asset portfolio" },
+      { re: /\btrees?\b/gi, to: "resources" },
+      { re: /\bspirits?\b/gi, to: "intangible assets" },
+      { re: /\bsong(s)?\b/gi, to: "content" },
+      { re: /\bbeauty\b/gi, to: "brand value" },
+      { re: /\bprotect\b/gi, to: "secure returns" },
+      { re: /\bdefend\b/gi, to: "optimize" },
+      { re: /\bknowledge\b/gi, to: "IP" },
+      { re: /\blaw\b/gi, to: "terms of service" },
+      { re: /\bmedicine\b/gi, to: "product" },
+      { re: /\bmerchandise\b/gi, to: "inventory" },
+      { re: /\bhouses?\b/gi, to: "facilities" },
+      { re: /\bcities?\b/gi, to: "markets" },
+      { re: /\bwork\b/gi, to: "labor cost" },
+      { re: /\bdisappear(ed|s)?\b/gi, to: "depreciate" },
+    ];
+
+    function applyDict(str){
+      let out = str;
+      for (const {re,to} of DICT) out = out.replace(re, to);
+      return out;
+    }
+
+    // 문단 -> 문장 단위 span (간단)
+    function splitSentences(text){
+      const paras = text.replace(/\r/g,"").split(/\n{2,}/);
+      return paras.map(p => p.split(/(?<=[.!?])\s+(?=[A-Z“"‘(])/g));
+    }
+
+    function escapeHtml(str){
+      return str
+        .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
+        .replaceAll('"',"&quot;").replaceAll("'","&#039;");
+    }
+
+    const content = document.getElementById("content");
+    const model = splitSentences(TEXT);
+
+    function render(){
+      content.innerHTML = "";
+      model.forEach(sentList => {
+        sentList.forEach(s => {
+          const span = document.createElement("span");
+          span.className = "sent";
+          span.dataset.orig = s;
+          span.dataset.trans = applyDict(s);
+          span.innerHTML = `<span class="orig">${escapeHtml(s)}</span>`;
+          content.appendChild(span);
+          content.appendChild(document.createTextNode(" "));
+        });
+        content.appendChild(document.createTextNode("\n\n"));
+      });
+    }
+    render();
+
+    // ---- 필름 열고 닫기
+    const swatch = document.getElementById("swatch");
+    const film = document.getElementById("film");
+    const closeFilm = document.getElementById("closeFilm");
+    const filmHeader = document.getElementById("filmHeader");
+
+    let filmOn = false;
+    function setFilm(on){
+      filmOn = on;
+      document.body.classList.toggle("filmOn", on);
+      if (on) updateAppropriation();
+      else clearAll();
+    }
+    swatch.addEventListener("click", () => setFilm(!filmOn));
+    closeFilm.addEventListener("click", () => setFilm(false));
+
+    // ---- 드래그로 필름 이동
+    let drag = { on:false, startX:0, startY:0, baseX:0, baseY:0 };
+
+    // film의 left/top을 직접 쓰기 위해 초기 위치 설정
+    function ensureFilmPositioned(){
+      const r = film.getBoundingClientRect();
+      // 이미 left/top이 설정돼 있으면 패스
+      if (film.style.left) return;
+      film.style.left = (r.left) + "px";
+      film.style.top  = (r.top) + "px";
+      film.style.right = "auto";
+      film.style.bottom = "auto";
+    }
+
+    filmHeader.addEventListener("pointerdown", (e) => {
+      if (!filmOn) return;
+      ensureFilmPositioned();
+      drag.on = true;
+      drag.startX = e.clientX;
+      drag.startY = e.clientY;
+      drag.baseX = parseFloat(film.style.left);
+      drag.baseY = parseFloat(film.style.top);
+      filmHeader.setPointerCapture(e.pointerId);
+    });
+
+    filmHeader.addEventListener("pointermove", (e) => {
+      if (!drag.on) return;
+      const dx = e.clientX - drag.startX;
+      const dy = e.clientY - drag.startY;
+      film.style.left = (drag.baseX + dx) + "px";
+      film.style.top  = (drag.baseY + dy) + "px";
+      updateAppropriation();
+    });
+
+    filmHeader.addEventListener("pointerup", (e) => {
+      drag.on = false;
+      try { filmHeader.releasePointerCapture(e.pointerId); } catch {}
+    });
+
+    // ---- 필름 영역 안의 문장만 번역
+    const spans = () => Array.from(content.querySelectorAll(".sent"));
+
+    function rectsOverlap(a,b){
+      return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+    }
+
+    function appropriate(span){
+      if (span.classList.contains("appropriated")) return;
+      const o = span.dataset.orig || "";
+      const t = span.dataset.trans || "";
+      span.classList.add("appropriated");
+      span.innerHTML = `<span class="orig">${escapeHtml(o)}</span> <span class="trans">→ ${escapeHtml(t)}</span>`;
+    }
+
+    function restore(span){
+      if (!span.classList.contains("appropriated")) return;
+      span.classList.remove("appropriated");
+      span.innerHTML = `<span class="orig">${escapeHtml(span.dataset.orig || "")}</span>`;
+    }
+
+    function clearAll(){
+      spans().forEach(restore);
+    }
+
+    function updateAppropriation(){
+      if (!filmOn) return;
+      const f = film.getBoundingClientRect();
+
+      // 헤더/설명 영역은 제외하고 “필름 본체”만 적용하고 싶으면 padding 조금 줄여도 됨
+      const effective = {
+        left: f.left + 10,
+        top: f.top + 44,               // 헤더 높이(34) + 여유
+        right: f.right - 10,
+        bottom: f.bottom - 10
+      };
+
+      spans().forEach(sp => {
+        const r = sp.getBoundingClientRect();
+        const hit = rectsOverlap(r, effective);
+        if (hit) appropriate(sp);
+        else restore(sp);
+      });
+    }
+
+    // 스크롤/리사이즈 때도 갱신
+    window.addEventListener("scroll", () => updateAppropriation(), { passive:true });
+    window.addEventListener("resize", () => updateAppropriation());
+  </script>
+</body>
+</html>
