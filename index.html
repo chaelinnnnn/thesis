@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation Lens — Word-only</title>
+  <title>Appropriation Lens — Transparent / Word-only</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -13,11 +13,10 @@
     }
     body{ margin:0; background:var(--bg); color:var(--ink); }
 
-    .wrap{ width:min(920px, 92vw); margin:0 auto; padding:44px 16px 220px; }
+    .wrap{ width:min(920px, 92vw); margin:0 auto; padding:44px 16px 240px; }
     header{
       position: sticky; top: 0; z-index: 3;
-      background: rgba(255,255,255,.86);
-      backdrop-filter: blur(8px);
+      background: rgba(255,255,255,.92);
       border-bottom: 1px solid rgba(0,0,0,.08);
       padding: 10px 0 12px;
     }
@@ -40,7 +39,7 @@
       border-radius: 8px;
       padding: 0 2px;
     }
-    /* 렌즈 안에서 치환된 단어 */
+    /* 렌즈 안에서 치환된 단어만 강조(무채색) */
     .w.ap{
       background: rgba(0,0,0,.06);
       box-shadow: 0 0 0 1px rgba(0,0,0,.10) inset;
@@ -48,14 +47,13 @@
       color:#000;
     }
 
-    /* 우하단: 렌즈 ON/OFF 스와치 */
+    /* 우하단 스와치(렌즈 ON/OFF) */
     #swatch{
       position: fixed; right: 18px; bottom: 18px;
       width: 52px; height: 52px;
       border-radius: 18px;
       border: 1px solid rgba(0,0,0,.14);
-      background: rgba(255,255,255,.9);
-      backdrop-filter: blur(10px);
+      background: rgba(255,255,255,.92);
       box-shadow: 0 8px 30px rgba(0,0,0,.12);
       cursor: pointer; z-index: 9999;
       display:grid; place-items:center; user-select:none;
@@ -66,81 +64,55 @@
       box-shadow: 0 0 0 6px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.14) inset;
     }
 
-    /* ✅ 동그란 렌즈(필름) */
+    /* ✅ 렌즈: 거의 투명, “치환”이 핵심 */
     #lens{
       position: fixed;
-      left: 50%; top: 55%;
-      width: 220px; height: 220px;
+      left: 52%;
+      top: 58%;
+
+      /* ✅ 렌즈 크기 키움 */
+      width: 360px;
+      height: 360px;
+
       transform: translate(-50%,-50%);
       border-radius: 999px;
-      border: 1px solid rgba(0,0,0,.18);
-      background: rgba(0,0,0,.05);
-      backdrop-filter: blur(2px) contrast(105%);
-      box-shadow: 0 16px 50px rgba(0,0,0,.18);
+
+      background: transparent;
+      border: 1px solid rgba(0,0,0,.08); /* 아주 약한 윤곽(원하면 0으로) */
+      box-shadow: none;
+      backdrop-filter: none;
+
       z-index: 9998;
 
-      opacity: 0;
+      opacity: 0;               /* OFF */
       pointer-events: none;
-      transition: opacity .18s ease, transform .18s ease;
-      overflow: hidden;
+      transition: opacity .16s ease;
 
-      /* 터치 드래그 UX */
-      touch-action: none;
+      touch-action: none;       /* 모바일 드래그 */
     }
     body.lensOn #lens{
       opacity: 1;
       pointer-events: auto;
     }
 
-    /* 셀로판 질감 */
-    #lens::before{
-      content:"";
-      position:absolute; inset:-24px;
-      background:
-        radial-gradient(circle at 20% 30%, rgba(255,255,255,.30), transparent 55%),
-        radial-gradient(circle at 70% 60%, rgba(255,255,255,.18), transparent 50%),
-        repeating-linear-gradient(25deg, rgba(255,255,255,.14) 0 2px, transparent 2px 8px);
-      opacity:.35;
-      mix-blend-mode: screen;
-      pointer-events:none;
-    }
-    /* 점무늬 */
-    #lens::after{
-      content:"";
-      position:absolute; inset:-10px;
-      background: radial-gradient(rgba(0,0,0,.22) 1px, transparent 1.8px);
-      background-size: 11px 11px;
-      opacity:.10;
-      mix-blend-mode: multiply;
-      pointer-events:none;
+    /* 잡는 순간만 살짝 보여서 조작감 */
+    #lens:active{
+      border-color: rgba(0,0,0,.18);
     }
 
-    /* 렌즈 가장자리 살짝 두껍게(유리 느낌) */
-    .ring{
-      position:absolute; inset:8px;
-      border-radius: 999px;
-      box-shadow: 0 0 0 1px rgba(0,0,0,.10) inset;
-      pointer-events:none;
-    }
-
-    /* 작은 힌트(원하면 삭제) */
+    /* 힌트(원하면 삭제 가능) */
     #hint{
       position: fixed;
       left: 18px; bottom: 18px;
       font-family: var(--sans);
       font-size: 12px;
-      opacity: .55;
-      background: rgba(255,255,255,.88);
+      opacity: .58;
+      background: rgba(255,255,255,.92);
       border: 1px solid rgba(0,0,0,.10);
       padding: 6px 10px;
       border-radius: 999px;
-      backdrop-filter: blur(10px);
       z-index: 9999;
-    }
-    body.lensOn #hint{ opacity:.25; }
-
-    @media (prefers-reduced-motion: reduce){
-      #lens{ transition:none; }
+      user-select: none;
     }
   </style>
 </head>
@@ -148,29 +120,34 @@
   <div class="wrap">
     <header>
       <h1>전유된 대화: 내 욕망으로 번역되는 타자의 목소리</h1>
-      <p>우측 하단 스와치를 눌러 렌즈를 켜고, 렌즈를 손가락/마우스로 끌어 이동하세요. 렌즈 안에 들어온 “단어”만 강제 번역됩니다.</p>
+      <p>우측 하단 스와치를 눌러 렌즈를 켠 뒤, 원형 렌즈를 손가락/마우스로 끌어 움직이세요. 렌즈 안에 들어온 “단어(명사 키워드)”만 강제 번역됩니다.</p>
     </header>
     <div id="content"></div>
   </div>
 
   <div id="swatch" aria-label="Toggle lens"><div class="inner"></div></div>
-  <div id="lens" aria-label="Lens"><div class="ring"></div></div>
+  <div id="lens" aria-label="Lens"></div>
   <div id="hint">Lens: OFF</div>
 
   <script>
-    // ✅ 원문을 길게 넣어도 OK
+    // ✅ 원문(길게): 필요하면 더 붙여 넣어도 OK
     const TEXT = `
-They discovered the beauty of merchandise and started making it relentlessly.
-After a time, there was so much merchandise that they had to build new houses to shelter and distribute it everywhere.
-Once these stone houses had proliferated, they connected them to each other with tangled paths and gave them the name "city."
-This is how little by little the forest disappeared from their land along with the game that inhabited it.
+They were the ones who put the tall stones of Omama’s house in place and created the first merchandise, paper skins, and medicine.
 
-The napenaperi spirits want to keep the beauty of their mirror-land and protect it from epidemic fumes.
-Bees are also xapiri; this is why their images spoke to me this way during my sleep.
+The napenaperi spirits want to keep the beauty of their mirror-land and protect it from epidemic fumes. Yet today’s white people no longer know how to take care of it, and they know nothing of these images, which are those of their ancestors.
+
+In the past, their long-ago elders knew them and made them dance. But then those who were born after them began to create the cities. Little by little they stopped hearing these spirits’ words. Then the books made them forgetful, and they finally rejected them.
+
+Bees are also xapiri; this is why their images spoke to me this way during my sleep. They wanted to tell me of their concern: the white people must stop mistreating the trees in the forest. Soon there will be no more flowers to feed us and make honey.
+
+Cutting down trees is also destroying the bees’ paths through the forest. Without flowering trees, they will no longer know where to work, and they will flee from our land forever.
+
+Then they discovered the beauty of merchandise and started making it relentlessly. After a time, there was so much merchandise that they had to build new houses to shelter and distribute it everywhere. Once these stone houses had proliferated, they connected them to each other with tangled paths and gave them the name “city.”
+
+This is how little by little the forest disappeared from their land along with the game that inhabited it.
 `.trim();
 
-    // ✅ “명사/핵심어”만 치환 (원하면 여기만 계속 다듬으면 됨)
-    // 키는 단어 경계(\b) 포함해서 ‘단어’처럼 작동하게.
+    // ✅ 치환 전 → 치환 후 (네가 요청한 목록 그대로)
     const NOUN_MAP = [
       [/^forest$/i, "Asset"],
       [/^tree(s)?$/i, "Resource"],
@@ -187,9 +164,9 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
       [/^image(s)?$/i, "Brand"],
       [/^medicine$/i, "Product"],
       [/^merchandise$/i, "Inventory"],
-      [/^city|cities$/i, "Market"],
-      [/^house|houses$/i, "Facility"],
-      [/^garden|gardens$/i, "Production"],
+      [/^(city|cities)$/i, "Market"],
+      [/^(house|houses)$/i, "Facility"],
+      [/^(garden|gardens)$/i, "Production"],
       [/^game$/i, "Stock"],
     ];
 
@@ -200,16 +177,9 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
 
     let lensOn = false;
 
-    function escapeHtml(str){
-      return str
-        .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
-        .replaceAll('"',"&quot;").replaceAll("'","&#039;");
-    }
-
-    // ✅ 텍스트를 “단어 토큰”으로 쪼개서 span으로 감싸기
-    // 공백/줄바꿈/문장부호는 그대로 출력(토큰화하면서 보존)
+    // 텍스트를 “단어 토큰”으로 쪼개서 span으로 감싸기
+    // 공백/줄바꿈/문장부호는 그대로 보존
     function renderTokenized(text){
-      // 단어(알파벳/하이픈/아포스트로피 포함) vs 그 외로 분리
       const parts = text.split(/([A-Za-z]+(?:'[A-Za-z]+)?)/g);
       const frag = document.createDocumentFragment();
 
@@ -225,7 +195,8 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
           frag.appendChild(document.createTextNode(p));
         }
       }
-      content.textContent = ""; // clear
+
+      content.textContent = "";
       content.appendChild(frag);
     }
 
@@ -247,14 +218,13 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
       const lr = lens.getBoundingClientRect();
       const cx = lr.left + lr.width / 2;
       const cy = lr.top + lr.height / 2;
-      const radius = lr.width / 2 - 12; // 가장자리 여유
+      const radius = lr.width / 2; // 렌즈 경계까지
 
       for (const sp of wordSpans()){
         const r = sp.getBoundingClientRect();
         const wx = r.left + r.width / 2;
         const wy = r.top + r.height / 2;
 
-        // 단어 중심점이 렌즈 원 안에 있으면 적용
         const inside = ((wx - cx) ** 2 + (wy - cy) ** 2) <= (radius ** 2);
 
         if (inside){
@@ -266,16 +236,12 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
               sp.textContent = t;
             }
           } else {
-            // 치환 대상이 아니면 원문 유지
-            if (sp.classList.contains("ap")){
+            if (sp.classList.contains("ap") || sp.textContent !== orig){
               sp.classList.remove("ap");
-              sp.textContent = orig;
-            } else if (sp.textContent !== orig){
               sp.textContent = orig;
             }
           }
         } else {
-          // 렌즈 밖이면 원문 복원
           const orig = sp.dataset.orig || "";
           if (sp.classList.contains("ap") || sp.textContent !== orig){
             sp.classList.remove("ap");
@@ -285,13 +251,13 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
       }
     }
 
-    // ---- 렌즈 토글
+    // 렌즈 토글
     function setLens(on){
       lensOn = on;
       document.body.classList.toggle("lensOn", on);
-      hint.textContent = on ? "Lens: ON (drag)" : "Lens: OFF";
+      hint.textContent = on ? "Lens: ON (drag the circle)" : "Lens: OFF";
+
       if (!on){
-        // 전부 원문 복원
         for (const sp of wordSpans()){
           sp.classList.remove("ap");
           sp.textContent = sp.dataset.orig || "";
@@ -300,10 +266,9 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
         updateLensEffect();
       }
     }
-
     swatch.addEventListener("click", () => setLens(!lensOn));
 
-    // ---- 렌즈 드래그: 렌즈 자체를 잡고 끌면 따라오게
+    // 렌즈 드래그: 렌즈 자체를 잡고 끌면 이동
     let dragging = false;
     let offsetX = 0, offsetY = 0;
 
@@ -311,9 +276,9 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
       const w = lens.offsetWidth;
       const h = lens.offsetHeight;
 
-      // 화면 밖으로 너무 나가지 않게 clamp (살짝은 나가도 괜찮으면 범위 늘려도 됨)
-      const x = Math.max(-w*0.15, Math.min(window.innerWidth - w*0.85, clientX - offsetX));
-      const y = Math.max(-h*0.15, Math.min(window.innerHeight - h*0.85, clientY - offsetY));
+      // 화면 밖으로 너무 나가지 않게(살짝은 나가도 되게 범위 여유)
+      const x = Math.max(-w*0.25, Math.min(window.innerWidth - w*0.75, clientX - offsetX));
+      const y = Math.max(-h*0.25, Math.min(window.innerHeight - h*0.75, clientY - offsetY));
 
       lens.style.left = x + "px";
       lens.style.top  = y + "px";
