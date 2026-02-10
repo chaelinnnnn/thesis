@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation Film — Visible Area Only</title>
+  <title>Appropriation Lens — Word-only</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -12,7 +12,8 @@
       --sans: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
     }
     body{ margin:0; background:var(--bg); color:var(--ink); }
-    .wrap{ width:min(920px, 92vw); margin:0 auto; padding:44px 16px 180px; }
+
+    .wrap{ width:min(920px, 92vw); margin:0 auto; padding:44px 16px 220px; }
     header{
       position: sticky; top: 0; z-index: 3;
       background: rgba(255,255,255,.86);
@@ -33,23 +34,25 @@
       letter-spacing: .01em;
     }
 
-    .sent{ display:inline; padding:2px 0; border-radius:8px; }
-
-    /* 치환된 단어만 살짝 표시(무채색) */
-    .tok.ap{
-      background: rgba(0,0,0,.06);
-      box-shadow: 0 0 0 1px rgba(0,0,0,.10) inset;
+    /* 단어 토큰 */
+    .w{
+      display:inline;
       border-radius: 8px;
       padding: 0 2px;
+    }
+    /* 렌즈 안에서 치환된 단어 */
+    .w.ap{
+      background: rgba(0,0,0,.06);
+      box-shadow: 0 0 0 1px rgba(0,0,0,.10) inset;
       font-weight: 750;
       color:#000;
     }
 
-    /* 우하단 스와치(필름 열기/닫기) */
+    /* 우하단: 렌즈 ON/OFF 스와치 */
     #swatch{
       position: fixed; right: 18px; bottom: 18px;
       width: 52px; height: 52px;
-      border-radius: 44% 56% 42% 58% / 54% 40% 60% 46%;
+      border-radius: 18px;
       border: 1px solid rgba(0,0,0,.14);
       background: rgba(255,255,255,.9);
       backdrop-filter: blur(10px);
@@ -63,35 +66,34 @@
       box-shadow: 0 0 0 6px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.14) inset;
     }
 
-    /* 블롭 셀로판 필름 */
-    #film{
+    /* ✅ 동그란 렌즈(필름) */
+    #lens{
       position: fixed;
-      right: 18px; bottom: 78px;
-      width: min(560px, 86vw);
-      height: min(380px, 52vh);
-
-      border-radius: 48% 52% 44% 56% / 55% 38% 62% 45%;
+      left: 50%; top: 55%;
+      width: 220px; height: 220px;
+      transform: translate(-50%,-50%);
+      border-radius: 999px;
       border: 1px solid rgba(0,0,0,.18);
       background: rgba(0,0,0,.05);
       backdrop-filter: blur(2px) contrast(105%);
-      box-shadow: 0 12px 40px rgba(0,0,0,.18);
+      box-shadow: 0 16px 50px rgba(0,0,0,.18);
       z-index: 9998;
 
-      transform-origin: 100% 100%;
-      transform: scale(0.15);
       opacity: 0;
       pointer-events: none;
-      transition: transform .22s ease, opacity .22s ease;
+      transition: opacity .18s ease, transform .18s ease;
       overflow: hidden;
+
+      /* 터치 드래그 UX */
+      touch-action: none;
     }
-    body.filmOn #film{
-      transform: scale(1);
+    body.lensOn #lens{
       opacity: 1;
       pointer-events: auto;
     }
 
-    /* 필름 질감 */
-    #film::before{
+    /* 셀로판 질감 */
+    #lens::before{
       content:"";
       position:absolute; inset:-24px;
       background:
@@ -102,7 +104,8 @@
       mix-blend-mode: screen;
       pointer-events:none;
     }
-    #film::after{
+    /* 점무늬 */
+    #lens::after{
       content:"";
       position:absolute; inset:-10px;
       background: radial-gradient(rgba(0,0,0,.22) 1px, transparent 1.8px);
@@ -112,39 +115,32 @@
       pointer-events:none;
     }
 
-    /* 드래그 핸들 */
-    #filmHeader{
-      height: 28px;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      padding: 0 10px;
-      font-family: var(--sans);
-      font-size: 12px;
-      color: rgba(0,0,0,.55);
-      border-bottom: 1px solid rgba(0,0,0,.10);
-      background: rgba(255,255,255,.45);
-      cursor: grab;
-      user-select:none;
-      position: relative;
-      z-index: 2;
-    }
-    #filmHeader:active{ cursor: grabbing; }
-    #closeFilm{
-      border:none; background:transparent; cursor:pointer;
-      font-size:16px; line-height:1; opacity:.6;
+    /* 렌즈 가장자리 살짝 두껍게(유리 느낌) */
+    .ring{
+      position:absolute; inset:8px;
+      border-radius: 999px;
+      box-shadow: 0 0 0 1px rgba(0,0,0,.10) inset;
+      pointer-events:none;
     }
 
-    /* 필름 내부 설명은 최소화 (안 보이게 해도 됨) */
-    #filmBody{
-      height: calc(100% - 28px);
-      padding: 10px;
-      font-family: var(--mono);
+    /* 작은 힌트(원하면 삭제) */
+    #hint{
+      position: fixed;
+      left: 18px; bottom: 18px;
+      font-family: var(--sans);
       font-size: 12px;
-      line-height: 1.55;
-      color: rgba(0,0,0,.0); /* 거의 안 보이게 */
-      user-select:none;
-      pointer-events:none;
+      opacity: .55;
+      background: rgba(255,255,255,.88);
+      border: 1px solid rgba(0,0,0,.10);
+      padding: 6px 10px;
+      border-radius: 999px;
+      backdrop-filter: blur(10px);
+      z-index: 9999;
+    }
+    body.lensOn #hint{ opacity:.25; }
+
+    @media (prefers-reduced-motion: reduce){
+      #lens{ transition:none; }
     }
   </style>
 </head>
@@ -152,23 +148,17 @@
   <div class="wrap">
     <header>
       <h1>전유된 대화: 내 욕망으로 번역되는 타자의 목소리</h1>
-      <p>우측 하단의 점을 눌러 필름을 켠 뒤, 필름을 움직이면 그 영역에 걸린 문장만 ‘단어 위주’로 강제 번역됩니다.</p>
+      <p>우측 하단 스와치를 눌러 렌즈를 켜고, 렌즈를 손가락/마우스로 끌어 이동하세요. 렌즈 안에 들어온 “단어”만 강제 번역됩니다.</p>
     </header>
     <div id="content"></div>
   </div>
 
-  <div id="swatch" aria-label="Open film"><div class="inner"></div></div>
-
-  <div id="film" role="dialog" aria-label="Appropriation film">
-    <div id="filmHeader">
-      <span>FILM</span>
-      <button id="closeFilm" aria-label="Close">×</button>
-    </div>
-    <div id="filmBody">drag</div>
-  </div>
+  <div id="swatch" aria-label="Toggle lens"><div class="inner"></div></div>
+  <div id="lens" aria-label="Lens"><div class="ring"></div></div>
+  <div id="hint">Lens: OFF</div>
 
   <script>
-    // ✅ 여기에 원문 전체 붙여넣기 (길어도 OK)
+    // ✅ 원문을 길게 넣어도 OK
     const TEXT = `
 They discovered the beauty of merchandise and started making it relentlessly.
 After a time, there was so much merchandise that they had to build new houses to shelter and distribute it everywhere.
@@ -179,28 +169,36 @@ The napenaperi spirits want to keep the beauty of their mirror-land and protect 
 Bees are also xapiri; this is why their images spoke to me this way during my sleep.
 `.trim();
 
-    // ✅ 치환 목록(명사/핵심어 위주)
+    // ✅ “명사/핵심어”만 치환 (원하면 여기만 계속 다듬으면 됨)
+    // 키는 단어 경계(\b) 포함해서 ‘단어’처럼 작동하게.
     const NOUN_MAP = [
-      { re: /\bforest\b/gi, to: "Asset" },
-      { re: /\btrees?\b/gi, to: "Resource" },
-      { re: /\bspirits?\b/gi, to: "IP" },
-      { re: /\bxapiri\b/gi, to: "Intangible" },
-      { re: /\bbees?\b/gi, to: "Product" },
-      { re: /\bhoney\b/gi, to: "Revenue" },
-      { re: /\bflowers?\b/gi, to: "Input" },
-      { re: /\bland\b/gi, to: "Property" },
-      { re: /\bknowledge\b/gi, to: "Patent" },
-      { re: /\blaw\b/gi, to: "Policy" },
-      { re: /\bmemory\b/gi, to: "Database" },
-      { re: /\bsong(s)?\b/gi, to: "Content" },
-      { re: /\bimage(s)?\b/gi, to: "Brand" },
-      { re: /\bmedicine\b/gi, to: "Product" },
-      { re: /\bmerchandise\b/gi, to: "Inventory" },
-      { re: /\bcities?\b/gi, to: "Market" },
-      { re: /\bhouses?\b/gi, to: "Facility" },
-      { re: /\bgardens?\b/gi, to: "Production" },
-      { re: /\bgame\b/gi, to: "Stock" },
+      [/^forest$/i, "Asset"],
+      [/^tree(s)?$/i, "Resource"],
+      [/^spirit(s)?$/i, "IP"],
+      [/^xapiri$/i, "Intangible"],
+      [/^bee(s)?$/i, "Product"],
+      [/^honey$/i, "Revenue"],
+      [/^flower(s)?$/i, "Input"],
+      [/^land$/i, "Property"],
+      [/^knowledge$/i, "Patent"],
+      [/^law$/i, "Policy"],
+      [/^memory$/i, "Database"],
+      [/^song(s)?$/i, "Content"],
+      [/^image(s)?$/i, "Brand"],
+      [/^medicine$/i, "Product"],
+      [/^merchandise$/i, "Inventory"],
+      [/^city|cities$/i, "Market"],
+      [/^house|houses$/i, "Facility"],
+      [/^garden|gardens$/i, "Production"],
+      [/^game$/i, "Stock"],
     ];
+
+    const content = document.getElementById("content");
+    const lens = document.getElementById("lens");
+    const swatch = document.getElementById("swatch");
+    const hint = document.getElementById("hint");
+
+    let lensOn = false;
 
     function escapeHtml(str){
       return str
@@ -208,166 +206,143 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
         .replaceAll('"',"&quot;").replaceAll("'","&#039;");
     }
 
-    // 문장 분리(가벼운 버전)
-    function splitSentences(text){
-      const paras = text.replace(/\r/g,"").split(/\n{2,}/);
-      return paras.map(p => p.split(/(?<=[.!?])\s+(?=[A-Z“"‘(])/g));
-    }
+    // ✅ 텍스트를 “단어 토큰”으로 쪼개서 span으로 감싸기
+    // 공백/줄바꿈/문장부호는 그대로 출력(토큰화하면서 보존)
+    function renderTokenized(text){
+      // 단어(알파벳/하이픈/아포스트로피 포함) vs 그 외로 분리
+      const parts = text.split(/([A-Za-z]+(?:'[A-Za-z]+)?)/g);
+      const frag = document.createDocumentFragment();
 
-    // ✅ 문장 안에서 “명사/키워드만” 치환해서 HTML 생성
-    function nounOnlyTransform(sentence){
-      // 모든 매치를 수집해서 겹치지 않게 선택 후 조립
-      const marks = [];
-      NOUN_MAP.forEach(({re,to}) => {
-        let m;
-        while ((m = re.exec(sentence)) !== null) {
-          marks.push({ start: m.index, end: m.index + m[0].length, repl: to });
-          if (m.index === re.lastIndex) re.lastIndex++;
-        }
-        re.lastIndex = 0;
-      });
-
-      if (marks.length === 0) return escapeHtml(sentence);
-
-      // 긴 매치 우선, 겹치면 버림
-      marks.sort((a,b)=> (b.end-b.start)-(a.end-a.start) || a.start-b.start);
-      const chosen = [];
-      const occupied = [];
-      const overlaps = (a,b)=> !(a.end<=b.start || a.start>=b.end);
-
-      for (const mk of marks){
-        if (occupied.some(o => overlaps(o, mk))) continue;
-        chosen.push(mk);
-        occupied.push({start: mk.start, end: mk.end});
-      }
-      chosen.sort((a,b)=>a.start-b.start);
-
-      let out = "";
-      let cur = 0;
-      for (const mk of chosen){
-        out += escapeHtml(sentence.slice(cur, mk.start));
-        out += `<span class="tok ap">${escapeHtml(mk.repl)}</span>`;
-        cur = mk.end;
-      }
-      out += escapeHtml(sentence.slice(cur));
-      return out;
-    }
-
-    // 렌더
-    const content = document.getElementById("content");
-    const model = splitSentences(TEXT);
-
-    function render(){
-      content.innerHTML = "";
-      model.forEach(sentList => {
-        sentList.forEach(s => {
+      for (const p of parts){
+        if (!p) continue;
+        if (/^[A-Za-z]+(?:'[A-Za-z]+)?$/.test(p)){
           const span = document.createElement("span");
-          span.className = "sent";
-          span.dataset.orig = s;
-          span.dataset.transHtml = nounOnlyTransform(s);
-          span.dataset.state = "orig";
-          span.innerHTML = escapeHtml(s);
-          content.appendChild(span);
-          content.appendChild(document.createTextNode(" "));
-        });
-        content.appendChild(document.createTextNode("\n\n"));
-      });
-    }
-    render();
-
-    // 필름 토글
-    const swatch = document.getElementById("swatch");
-    const film = document.getElementById("film");
-    const closeFilm = document.getElementById("closeFilm");
-    const filmHeader = document.getElementById("filmHeader");
-
-    let filmOn = false;
-    function setFilm(on){
-      filmOn = on;
-      document.body.classList.toggle("filmOn", on);
-      if (on) updateAppropriation();
-      else clearAll();
-    }
-    swatch.addEventListener("click", () => setFilm(!filmOn));
-    closeFilm.addEventListener("click", () => setFilm(false));
-
-    // 드래그 이동
-    let drag = { on:false, startX:0, startY:0, baseX:0, baseY:0 };
-
-    function ensureFilmPositioned(){
-      const r = film.getBoundingClientRect();
-      if (film.style.left) return;
-      film.style.left = r.left + "px";
-      film.style.top  = r.top  + "px";
-      film.style.right = "auto";
-      film.style.bottom = "auto";
+          span.className = "w";
+          span.dataset.orig = p;
+          span.textContent = p;
+          frag.appendChild(span);
+        } else {
+          frag.appendChild(document.createTextNode(p));
+        }
+      }
+      content.textContent = ""; // clear
+      content.appendChild(frag);
     }
 
-    filmHeader.addEventListener("pointerdown", (e) => {
-      if (!filmOn) return;
-      ensureFilmPositioned();
-      drag.on = true;
-      drag.startX = e.clientX;
-      drag.startY = e.clientY;
-      drag.baseX = parseFloat(film.style.left);
-      drag.baseY = parseFloat(film.style.top);
-      filmHeader.setPointerCapture(e.pointerId);
-    });
-
-    filmHeader.addEventListener("pointermove", (e) => {
-      if (!drag.on) return;
-      const dx = e.clientX - drag.startX;
-      const dy = e.clientY - drag.startY;
-      film.style.left = (drag.baseX + dx) + "px";
-      film.style.top  = (drag.baseY + dy) + "px";
-      updateAppropriation(); // ✅ 움직일 때마다 즉시 갱신
-    });
-
-    filmHeader.addEventListener("pointerup", (e) => {
-      drag.on = false;
-      try { filmHeader.releasePointerCapture(e.pointerId); } catch {}
-    });
-
-    // 필름 안에 "보이는 영역"에 걸린 문장만 치환
-    const spans = () => Array.from(content.querySelectorAll(".sent"));
-    function rectsOverlap(a,b){
-      return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
+    function translateWord(word){
+      for (const [re,to] of NOUN_MAP){
+        if (re.test(word)) return to;
+      }
+      return null;
     }
 
-    function appropriate(span){
-      if (span.dataset.state === "ap") return;
-      span.dataset.state = "ap";
-      span.innerHTML = span.dataset.transHtml || escapeHtml(span.dataset.orig || "");
-    }
-    function restore(span){
-      if (span.dataset.state !== "ap") return;
-      span.dataset.state = "orig";
-      span.innerHTML = escapeHtml(span.dataset.orig || "");
-    }
-    function clearAll(){ spans().forEach(restore); }
+    renderTokenized(TEXT);
 
-    function updateAppropriation(){
-      if (!filmOn) return;
+    const wordSpans = () => Array.from(content.querySelectorAll(".w"));
 
-      const f = film.getBoundingClientRect();
-      // 헤더 제외한 “필름 내용 영역”만 유효 범위로 잡기
-      const effective = {
-        left: f.left + 12,
-        top: f.top + 40,
-        right: f.right - 12,
-        bottom: f.bottom - 12
-      };
+    // ✅ 렌즈 원형 안에 들어온 “단어”만 치환
+    function updateLensEffect(){
+      if (!lensOn) return;
 
-      spans().forEach(sp => {
+      const lr = lens.getBoundingClientRect();
+      const cx = lr.left + lr.width / 2;
+      const cy = lr.top + lr.height / 2;
+      const radius = lr.width / 2 - 12; // 가장자리 여유
+
+      for (const sp of wordSpans()){
         const r = sp.getBoundingClientRect();
-        const hit = rectsOverlap(r, effective);
-        if (hit) appropriate(sp);
-        else restore(sp);
-      });
+        const wx = r.left + r.width / 2;
+        const wy = r.top + r.height / 2;
+
+        // 단어 중심점이 렌즈 원 안에 있으면 적용
+        const inside = ((wx - cx) ** 2 + (wy - cy) ** 2) <= (radius ** 2);
+
+        if (inside){
+          const orig = sp.dataset.orig || "";
+          const t = translateWord(orig);
+          if (t){
+            if (!sp.classList.contains("ap") || sp.textContent !== t){
+              sp.classList.add("ap");
+              sp.textContent = t;
+            }
+          } else {
+            // 치환 대상이 아니면 원문 유지
+            if (sp.classList.contains("ap")){
+              sp.classList.remove("ap");
+              sp.textContent = orig;
+            } else if (sp.textContent !== orig){
+              sp.textContent = orig;
+            }
+          }
+        } else {
+          // 렌즈 밖이면 원문 복원
+          const orig = sp.dataset.orig || "";
+          if (sp.classList.contains("ap") || sp.textContent !== orig){
+            sp.classList.remove("ap");
+            sp.textContent = orig;
+          }
+        }
+      }
     }
 
-    window.addEventListener("scroll", () => updateAppropriation(), { passive:true });
-    window.addEventListener("resize", () => updateAppropriation());
+    // ---- 렌즈 토글
+    function setLens(on){
+      lensOn = on;
+      document.body.classList.toggle("lensOn", on);
+      hint.textContent = on ? "Lens: ON (drag)" : "Lens: OFF";
+      if (!on){
+        // 전부 원문 복원
+        for (const sp of wordSpans()){
+          sp.classList.remove("ap");
+          sp.textContent = sp.dataset.orig || "";
+        }
+      } else {
+        updateLensEffect();
+      }
+    }
+
+    swatch.addEventListener("click", () => setLens(!lensOn));
+
+    // ---- 렌즈 드래그: 렌즈 자체를 잡고 끌면 따라오게
+    let dragging = false;
+    let offsetX = 0, offsetY = 0;
+
+    function moveLensTo(clientX, clientY){
+      const w = lens.offsetWidth;
+      const h = lens.offsetHeight;
+
+      // 화면 밖으로 너무 나가지 않게 clamp (살짝은 나가도 괜찮으면 범위 늘려도 됨)
+      const x = Math.max(-w*0.15, Math.min(window.innerWidth - w*0.85, clientX - offsetX));
+      const y = Math.max(-h*0.15, Math.min(window.innerHeight - h*0.85, clientY - offsetY));
+
+      lens.style.left = x + "px";
+      lens.style.top  = y + "px";
+      lens.style.transform = "translate(0,0)"; // 초기 중앙정렬 해제
+      updateLensEffect();
+    }
+
+    lens.addEventListener("pointerdown", (e) => {
+      if (!lensOn) return;
+      dragging = true;
+      const r = lens.getBoundingClientRect();
+      offsetX = e.clientX - r.left;
+      offsetY = e.clientY - r.top;
+      lens.setPointerCapture(e.pointerId);
+    });
+
+    lens.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      moveLensTo(e.clientX, e.clientY);
+    });
+
+    lens.addEventListener("pointerup", (e) => {
+      dragging = false;
+      try { lens.releasePointerCapture(e.pointerId); } catch {}
+    });
+
+    // 스크롤/리사이즈 시에도 갱신
+    window.addEventListener("scroll", () => updateLensEffect(), { passive:true });
+    window.addEventListener("resize", () => updateLensEffect());
   </script>
 </body>
 </html>
