@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation Lens — Final</title>
+  <title>Appropriation Lens — Visible Ring</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -33,10 +33,7 @@
       letter-spacing: .01em;
     }
 
-    /* 단어 토큰 */
     .w{ display:inline; border-radius: 8px; padding: 0 2px; }
-
-    /* 렌즈 안에서 치환된 단어만 표시(무채색) */
     .w.ap{
       background: rgba(0,0,0,.06);
       box-shadow: 0 0 0 1px rgba(0,0,0,.10) inset;
@@ -44,7 +41,7 @@
       color:#000;
     }
 
-    /* 우하단 스와치(렌즈 가동 토글) — 유지 */
+    /* 토글 스와치(유지) */
     #swatch{
       position: fixed; right: 18px; bottom: 18px;
       width: 52px; height: 52px;
@@ -61,43 +58,74 @@
       box-shadow: 0 0 0 6px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.14) inset;
     }
 
-    /* ✅ 렌즈(원형) — 기능은 유지, ‘보임’만 투명하게 */
+    /* ✅ 렌즈: 안은 투명, “링”만 확실히 보이게 */
     #lens{
       position: fixed;
       left: 50%;
       top: 58%;
-
-      /* ✅ 렌즈 크기 키움 */
       width: 420px;
       height: 420px;
-
       transform: translate(-50%,-50%);
       border-radius: 999px;
 
-      /* ✅ 거의 투명(중요) */
-      background: transparent;
-      border: 1px solid rgba(0,0,0,.06); /* 원하면 0으로 */
-      box-shadow: none;
-      backdrop-filter: none;
+      background: transparent;       /* 안은 완전 투명 */
+      border: 2px dashed rgba(0,0,0,.22); /* ✅ 확실히 보이는 링 */
+      box-shadow: 0 0 0 1px rgba(255,255,255,.9) inset; /* 종이 위 링 느낌 */
 
       z-index: 9998;
-
-      /* ✅ OFF면 안 보이고/못 잡음 (가동 토글 유지) */
       opacity: 0;
       pointer-events: none;
-
       transition: opacity .16s ease;
-      touch-action: none; /* 모바일 드래그 */
+
+      touch-action: none;
     }
     body.lensOn #lens{
       opacity: 1;
       pointer-events: auto;
     }
 
-    /* 조작할 때만 살짝 보이게(원하면 삭제) */
-    #lens:active{ border-color: rgba(0,0,0,.16); }
+    /* ✅ 렌즈 핸들(잡는 지점): 레퍼런스처럼 “검은 점” */
+    #handle{
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 42px;
+      height: 42px;
+      transform: translate(140px, 140px); /* 링 안쪽 우하단에 배치 */
+      border-radius: 999px;
+      background: rgba(255,255,255,.85);
+      border: 1px solid rgba(0,0,0,.12);
+      box-shadow: 0 10px 30px rgba(0,0,0,.15);
+      display: grid;
+      place-items: center;
+      pointer-events: none; /* 렌즈 전체가 드래그 되게 */
+      opacity: .95;
+    }
+    #handle::before{
+      content:"";
+      width: 14px;
+      height: 14px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.85);
+      box-shadow: 0 0 0 6px rgba(0,0,0,.06);
+      display:block;
+    }
 
-    /* 상태 표시(원하면 삭제 가능) */
+    /* ON일 때만 핸들 보이게 */
+    #lensWrap{
+      position: fixed;
+      inset: 0;
+      pointer-events: none; /* 렌즈만 pointer-events 활성화 */
+      z-index: 9998;
+      opacity: 0;
+      transition: opacity .16s ease;
+    }
+    body.lensOn #lensWrap{ opacity: 1; }
+
+    /* 렌즈는 pointer-events 켜야 드래그 가능 */
+    body.lensOn #lens{ pointer-events: auto; }
+    body.lensOn #lensWrap{ pointer-events: none; }
+
     #hint{
       position: fixed; left: 18px; bottom: 18px;
       font-family: var(--sans);
@@ -116,17 +144,23 @@
   <div class="wrap">
     <header>
       <h1>전유된 대화: 내 욕망으로 번역되는 타자의 목소리</h1>
-      <p>우측 하단 스와치로 렌즈를 켜고/끄세요. 렌즈가 켜진 상태에서만, 원형 안에 들어온 “단어(명사 키워드)”가 강제 번역됩니다.</p>
+      <p>우측 하단 스와치로 렌즈를 켜고/끄세요. 렌즈가 켜진 상태에서 원형 안에 들어온 “단어(명사 키워드)”만 강제 번역됩니다.</p>
     </header>
     <div id="content"></div>
   </div>
 
   <div id="swatch" aria-label="Toggle lens"><div class="inner"></div></div>
-  <div id="lens" aria-label="Lens"></div>
+
+  <!-- 렌즈 + 핸들 -->
+  <div id="lensWrap" aria-hidden="true">
+    <div id="lens" aria-label="Lens">
+      <div id="handle" aria-hidden="true"></div>
+    </div>
+  </div>
+
   <div id="hint">Lens: OFF</div>
 
   <script>
-    // ✅ 원문(더 길게). 필요하면 아래에 계속 붙여도 됨.
     const TEXT = `
 They were the ones who put the tall stones of Omama’s house in place and created the first merchandise, paper skins, and medicine.
 
@@ -140,10 +174,9 @@ Cutting down trees is also destroying the bees’ paths through the forest. With
 
 Then they discovered the beauty of merchandise and started making it relentlessly. After a time, there was so much merchandise that they had to build new houses to shelter and distribute it everywhere. Once these stone houses had proliferated, they connected them to each other with tangled paths and gave them the name “city.”
 
-This is how little by little the forest disappeared from their land along with the game that inhabited it. They only kept a few living animals in pens and some other dead ones in glass cases so their children could contemplate them as souvenirs.
+This is how little by little the forest disappeared from their land along with the game that inhabited it.
 `.trim();
 
-    // ✅ 치환 전 → 치환 후 (요청한 명단 그대로)
     const NOUN_MAP = [
       [/^forest$/i, "Asset"],
       [/^tree(s)?$/i, "Resource"],
@@ -173,11 +206,9 @@ This is how little by little the forest disappeared from their land along with t
 
     let lensOn = false;
 
-    // 텍스트를 단어 토큰(span)으로 쪼개기: 공백/구두점/줄바꿈은 보존
     function renderTokenized(text){
       const parts = text.split(/([A-Za-z]+(?:'[A-Za-z]+)?)/g);
       const frag = document.createDocumentFragment();
-
       for (const p of parts){
         if (!p) continue;
         if (/^[A-Za-z]+(?:'[A-Za-z]+)?$/.test(p)){
@@ -202,10 +233,8 @@ This is how little by little the forest disappeared from their land along with t
     }
 
     renderTokenized(TEXT);
-
     const wordSpans = () => Array.from(content.querySelectorAll(".w"));
 
-    // ✅ 렌즈 원형 내부에 들어온 단어만 치환
     function updateLensEffect(){
       if (!lensOn) return;
 
@@ -244,14 +273,11 @@ This is how little by little the forest disappeared from their land along with t
       }
     }
 
-    // ✅ 렌즈 “가동 토글(ON/OFF)” — 그대로 유지
     function setLens(on){
       lensOn = on;
       document.body.classList.toggle("lensOn", on);
-      hint.textContent = on ? "Lens: ON (drag the circle)" : "Lens: OFF";
-
+      hint.textContent = on ? "Lens: ON (drag the dashed circle)" : "Lens: OFF";
       if (!on){
-        // 끄면 전부 원문 복원
         for (const sp of wordSpans()){
           sp.classList.remove("ap");
           sp.textContent = sp.dataset.orig || "";
@@ -263,7 +289,7 @@ This is how little by little the forest disappeared from their land along with t
 
     swatch.addEventListener("click", () => setLens(!lensOn));
 
-    // ✅ 렌즈 드래그: 렌즈 자체를 잡고 이동
+    // 드래그: 렌즈 전체를 잡고 이동 (링이 보이니까 잡기 쉬움)
     let dragging = false;
     let offsetX = 0, offsetY = 0;
 
@@ -271,13 +297,12 @@ This is how little by little the forest disappeared from their land along with t
       const w = lens.offsetWidth;
       const h = lens.offsetHeight;
 
-      // 화면 밖으로 살짝 나가도 되게 여유 clamp
       const x = Math.max(-w*0.25, Math.min(window.innerWidth - w*0.75, clientX - offsetX));
       const y = Math.max(-h*0.25, Math.min(window.innerHeight - h*0.75, clientY - offsetY));
 
       lens.style.left = x + "px";
       lens.style.top  = y + "px";
-      lens.style.transform = "translate(0,0)"; // 초기 중앙 정렬 해제
+      lens.style.transform = "translate(0,0)";
       updateLensEffect();
     }
 
@@ -300,7 +325,6 @@ This is how little by little the forest disappeared from their land along with t
       try { lens.releasePointerCapture(e.pointerId); } catch {}
     });
 
-    // 스크롤/리사이즈 때도 계속 맞춰서 갱신
     window.addEventListener("scroll", () => updateLensEffect(), { passive:true });
     window.addEventListener("resize", () => updateLensEffect());
   </script>
