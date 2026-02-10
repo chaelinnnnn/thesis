@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation Film — Noun-only</title>
+  <title>Appropriation Film — Visible Area Only</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -35,55 +35,48 @@
 
     .sent{ display:inline; padding:2px 0; border-radius:8px; }
 
-    /* 바뀐 단어만 살짝 “표시” */
-    .tok{
-      border-radius: 8px;
-      padding: 0 2px;
-      transition: background .12s ease;
-    }
+    /* 치환된 단어만 살짝 표시(무채색) */
     .tok.ap{
       background: rgba(0,0,0,.06);
       box-shadow: 0 0 0 1px rgba(0,0,0,.10) inset;
+      border-radius: 8px;
+      padding: 0 2px;
       font-weight: 750;
       color:#000;
     }
 
+    /* 우하단 스와치(필름 열기/닫기) */
     #swatch{
-      position: fixed;
-      right: 18px;
-      bottom: 18px;
-      width: 52px;
-      height: 52px;
+      position: fixed; right: 18px; bottom: 18px;
+      width: 52px; height: 52px;
       border-radius: 44% 56% 42% 58% / 54% 40% 60% 46%;
       border: 1px solid rgba(0,0,0,.14);
       background: rgba(255,255,255,.9);
       backdrop-filter: blur(10px);
       box-shadow: 0 8px 30px rgba(0,0,0,.12);
-      cursor: pointer;
-      z-index: 9999;
-      display:grid;
-      place-items:center;
-      user-select:none;
+      cursor: pointer; z-index: 9999;
+      display:grid; place-items:center; user-select:none;
     }
     #swatch .inner{
-      width: 18px; height: 18px;
-      border-radius: 999px;
+      width: 18px; height: 18px; border-radius: 999px;
       background: rgba(0,0,0,.82);
       box-shadow: 0 0 0 6px rgba(0,0,0,.06), 0 0 0 1px rgba(0,0,0,.14) inset;
     }
 
+    /* 블롭 셀로판 필름 */
     #film{
       position: fixed;
-      right: 18px;
-      bottom: 78px;
+      right: 18px; bottom: 78px;
       width: min(560px, 86vw);
       height: min(380px, 52vh);
+
       border-radius: 48% 52% 44% 56% / 55% 38% 62% 45%;
       border: 1px solid rgba(0,0,0,.18);
       background: rgba(0,0,0,.05);
       backdrop-filter: blur(2px) contrast(105%);
       box-shadow: 0 12px 40px rgba(0,0,0,.18);
       z-index: 9998;
+
       transform-origin: 100% 100%;
       transform: scale(0.15);
       opacity: 0;
@@ -97,6 +90,7 @@
       pointer-events: auto;
     }
 
+    /* 필름 질감 */
     #film::before{
       content:"";
       position:absolute; inset:-24px;
@@ -118,6 +112,7 @@
       pointer-events:none;
     }
 
+    /* 드래그 핸들 */
     #filmHeader{
       height: 28px;
       display:flex;
@@ -131,19 +126,25 @@
       background: rgba(255,255,255,.45);
       cursor: grab;
       user-select:none;
+      position: relative;
+      z-index: 2;
     }
     #filmHeader:active{ cursor: grabbing; }
     #closeFilm{
       border:none; background:transparent; cursor:pointer;
       font-size:16px; line-height:1; opacity:.6;
     }
+
+    /* 필름 내부 설명은 최소화 (안 보이게 해도 됨) */
     #filmBody{
       height: calc(100% - 28px);
       padding: 10px;
       font-family: var(--mono);
       font-size: 12px;
       line-height: 1.55;
-      color: rgba(0,0,0,.55);
+      color: rgba(0,0,0,.0); /* 거의 안 보이게 */
+      user-select:none;
+      pointer-events:none;
     }
   </style>
 </head>
@@ -151,7 +152,7 @@
   <div class="wrap">
     <header>
       <h1>전유된 대화: 내 욕망으로 번역되는 타자의 목소리</h1>
-      <p>검은 점을 눌러 필름을 펼치고 드래그하세요. 필름 안에 들어온 문장에서 ‘명사(핵심어)’만 자산/제품/수익의 언어로 치환됩니다.</p>
+      <p>우측 하단의 점을 눌러 필름을 켠 뒤, 필름을 움직이면 그 영역에 걸린 문장만 ‘단어 위주’로 강제 번역됩니다.</p>
     </header>
     <div id="content"></div>
   </div>
@@ -160,25 +161,25 @@
 
   <div id="film" role="dialog" aria-label="Appropriation film">
     <div id="filmHeader">
-      <span>APPROPRIATION FILM</span>
+      <span>FILM</span>
       <button id="closeFilm" aria-label="Close">×</button>
     </div>
-    <div id="filmBody">
-      (필름 안쪽) forest / spirits / bees / law … 같은 핵심어만 <b>강제 번역</b>됩니다.
-    </div>
+    <div id="filmBody">drag</div>
   </div>
 
   <script>
-    // ✅ 원문 길게 붙여넣기
+    // ✅ 여기에 원문 전체 붙여넣기 (길어도 OK)
     const TEXT = `
+They discovered the beauty of merchandise and started making it relentlessly.
+After a time, there was so much merchandise that they had to build new houses to shelter and distribute it everywhere.
+Once these stone houses had proliferated, they connected them to each other with tangled paths and gave them the name "city."
+This is how little by little the forest disappeared from their land along with the game that inhabited it.
+
 The napenaperi spirits want to keep the beauty of their mirror-land and protect it from epidemic fumes.
 Bees are also xapiri; this is why their images spoke to me this way during my sleep.
-Then they discovered the beauty of merchandise and started making it relentlessly.
-This is how little by little the forest disappeared from their land along with the game that inhabited it.
 `.trim();
 
-    // ✅ “명사(핵심어) 번역” 맵: 여기만 잘 잡으면 작품이 된다
-    // 키는 정규식. 가능한 한 “대상/개체”에 해당하는 단어(명사)를 중심으로.
+    // ✅ 치환 목록(명사/핵심어 위주)
     const NOUN_MAP = [
       { re: /\bforest\b/gi, to: "Asset" },
       { re: /\btrees?\b/gi, to: "Resource" },
@@ -201,74 +202,58 @@ This is how little by little the forest disappeared from their land along with t
       { re: /\bgame\b/gi, to: "Stock" },
     ];
 
-    // 문장 분리 (가벼운 버전)
-    function splitSentences(text){
-      const paras = text.replace(/\r/g,"").split(/\n{2,}/);
-      return paras.map(p => p.split(/(?<=[.!?])\s+(?=[A-Z“"‘(])/g));
-    }
     function escapeHtml(str){
       return str
         .replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;")
         .replaceAll('"',"&quot;").replaceAll("'","&#039;");
     }
 
-    // ✅ “명사만 치환”: 원문을 HTML로 만들면서 치환된 토큰만 span 표시
+    // 문장 분리(가벼운 버전)
+    function splitSentences(text){
+      const paras = text.replace(/\r/g,"").split(/\n{2,}/);
+      return paras.map(p => p.split(/(?<=[.!?])\s+(?=[A-Z“"‘(])/g));
+    }
+
+    // ✅ 문장 안에서 “명사/키워드만” 치환해서 HTML 생성
     function nounOnlyTransform(sentence){
-      // 1) 일단 이스케이프
-      let s = escapeHtml(sentence);
-
-      // 2) 치환: 겹치지 않게 임시 토큰으로 바꾼 뒤 마지막에 마크업
-      //    (치환 단어에 다시 치환이 걸리는 걸 막기 위해 placeholder 사용)
-      const placeholders = [];
-      NOUN_MAP.forEach(({re,to}, idx) => {
-        // HTML 상태라 정규식은 원문 기준이 더 안전 -> sentence에서 작업하고 다시 조립
-      });
-
-      // 원문 기반 치환을 위해 원문을 순차적으로 처리
-      let working = sentence;
+      // 모든 매치를 수집해서 겹치지 않게 선택 후 조립
       const marks = [];
-
-      // 각 규칙마다 매치들을 찾아서 기록
       NOUN_MAP.forEach(({re,to}) => {
         let m;
-        while ((m = re.exec(working)) !== null) {
-          marks.push({ start: m.index, end: m.index + m[0].length, repl: to, raw: m[0] });
-          if (m.index === re.lastIndex) re.lastIndex++; // 안전장치
+        while ((m = re.exec(sentence)) !== null) {
+          marks.push({ start: m.index, end: m.index + m[0].length, repl: to });
+          if (m.index === re.lastIndex) re.lastIndex++;
         }
-        re.lastIndex = 0; // 다음 문장에 영향 없게
+        re.lastIndex = 0;
       });
 
       if (marks.length === 0) return escapeHtml(sentence);
 
-      // 겹치는 매치 정리: 길이가 긴 것 우선, 그 다음 앞쪽 우선
-      marks.sort((a,b) => (b.end-b.start) - (a.end-a.start) || a.start - b.start);
-
+      // 긴 매치 우선, 겹치면 버림
+      marks.sort((a,b)=> (b.end-b.start)-(a.end-a.start) || a.start-b.start);
       const chosen = [];
       const occupied = [];
-      function overlaps(a,b){ return !(a.end <= b.start || a.start >= b.end); }
+      const overlaps = (a,b)=> !(a.end<=b.start || a.start>=b.end);
 
       for (const mk of marks){
         if (occupied.some(o => overlaps(o, mk))) continue;
         chosen.push(mk);
         occupied.push({start: mk.start, end: mk.end});
       }
-      // 원문 순서로 재정렬
       chosen.sort((a,b)=>a.start-b.start);
 
-      // 조립
       let out = "";
-      let cursor = 0;
+      let cur = 0;
       for (const mk of chosen){
-        out += escapeHtml(sentence.slice(cursor, mk.start));
-        // 바뀐 단어만 표시(원문 단어를 자본 단어로 치환)
-        out += `<span class="tok ap" title="${escapeHtml(mk.raw)}">${escapeHtml(mk.repl)}</span>`;
-        cursor = mk.end;
+        out += escapeHtml(sentence.slice(cur, mk.start));
+        out += `<span class="tok ap">${escapeHtml(mk.repl)}</span>`;
+        cur = mk.end;
       }
-      out += escapeHtml(sentence.slice(cursor));
+      out += escapeHtml(sentence.slice(cur));
       return out;
     }
 
-    // 렌더: 문장 span 생성 (원문 저장 + 변환 HTML 저장)
+    // 렌더
     const content = document.getElementById("content");
     const model = splitSentences(TEXT);
 
@@ -280,6 +265,7 @@ This is how little by little the forest disappeared from their land along with t
           span.className = "sent";
           span.dataset.orig = s;
           span.dataset.transHtml = nounOnlyTransform(s);
+          span.dataset.state = "orig";
           span.innerHTML = escapeHtml(s);
           content.appendChild(span);
           content.appendChild(document.createTextNode(" "));
@@ -307,6 +293,7 @@ This is how little by little the forest disappeared from their land along with t
 
     // 드래그 이동
     let drag = { on:false, startX:0, startY:0, baseX:0, baseY:0 };
+
     function ensureFilmPositioned(){
       const r = film.getBoundingClientRect();
       if (film.style.left) return;
@@ -315,6 +302,7 @@ This is how little by little the forest disappeared from their land along with t
       film.style.right = "auto";
       film.style.bottom = "auto";
     }
+
     filmHeader.addEventListener("pointerdown", (e) => {
       if (!filmOn) return;
       ensureFilmPositioned();
@@ -325,20 +313,22 @@ This is how little by little the forest disappeared from their land along with t
       drag.baseY = parseFloat(film.style.top);
       filmHeader.setPointerCapture(e.pointerId);
     });
+
     filmHeader.addEventListener("pointermove", (e) => {
       if (!drag.on) return;
       const dx = e.clientX - drag.startX;
       const dy = e.clientY - drag.startY;
       film.style.left = (drag.baseX + dx) + "px";
       film.style.top  = (drag.baseY + dy) + "px";
-      updateAppropriation();
+      updateAppropriation(); // ✅ 움직일 때마다 즉시 갱신
     });
+
     filmHeader.addEventListener("pointerup", (e) => {
       drag.on = false;
       try { filmHeader.releasePointerCapture(e.pointerId); } catch {}
     });
 
-    // 필름 안 문장만 변환 적용
+    // 필름 안에 "보이는 영역"에 걸린 문장만 치환
     const spans = () => Array.from(content.querySelectorAll(".sent"));
     function rectsOverlap(a,b){
       return !(a.right < b.left || a.left > b.right || a.bottom < b.top || a.top > b.bottom);
@@ -347,7 +337,7 @@ This is how little by little the forest disappeared from their land along with t
     function appropriate(span){
       if (span.dataset.state === "ap") return;
       span.dataset.state = "ap";
-      span.innerHTML = span.dataset.transHtml || span.textContent;
+      span.innerHTML = span.dataset.transHtml || escapeHtml(span.dataset.orig || "");
     }
     function restore(span){
       if (span.dataset.state !== "ap") return;
@@ -358,13 +348,16 @@ This is how little by little the forest disappeared from their land along with t
 
     function updateAppropriation(){
       if (!filmOn) return;
+
       const f = film.getBoundingClientRect();
+      // 헤더 제외한 “필름 내용 영역”만 유효 범위로 잡기
       const effective = {
         left: f.left + 12,
         top: f.top + 40,
         right: f.right - 12,
         bottom: f.bottom - 12
       };
+
       spans().forEach(sp => {
         const r = sp.getBoundingClientRect();
         const hit = rectsOverlap(r, effective);
