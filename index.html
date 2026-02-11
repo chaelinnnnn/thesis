@@ -9,15 +9,9 @@
       --bg:#ffffff;
       --ink:#111;
       --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-
       --lensSize: 200px;
       --fadeSeconds: 6.5;
-
-      /* ✅ magnifier tuning */
-      --mag: 1.18;             /* 확대 배율 (1.12~1.28 추천) */
-      --warp: 10;              /* 굴절 강도 (0~16 정도) */
     }
-
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
     body{ margin:0; background:var(--bg); color:var(--ink); overflow:hidden; }
@@ -35,8 +29,28 @@
       position:relative;
       z-index:2;
     }
-    .w{ display:inline-block; padding:0 .06em; }
-    .w.hideInk{ color:transparent; }
+
+    /* ✅ micro motion (readability-safe) */
+    .w{
+      display:inline-block;
+      padding:0 .06em;
+      transform: translateZ(0);
+      will-change: transform;
+      animation: microFloat var(--mfDur, 6.8s) ease-in-out infinite;
+      animation-delay: var(--mfDelay, 0s);
+    }
+    .w.hideInk{ color:transparent; animation: none; }
+
+    @keyframes microFloat{
+      0%   { transform: translate3d(0,0,0) rotate(0deg); }
+      33%  { transform: translate3d(var(--mx, .45px), var(--my, -.35px), 0) rotate(var(--mr, .10deg)); }
+      66%  { transform: translate3d(calc(var(--mx, .45px) * -0.65), calc(var(--my, -.35px) * -0.55), 0) rotate(calc(var(--mr, .10deg) * -0.65)); }
+      100% { transform: translate3d(0,0,0) rotate(0deg); }
+    }
+
+    @media (prefers-reduced-motion: reduce){
+      .w{ animation:none !important; }
+    }
 
     #blackout{ position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; z-index:5; transition:opacity 90ms linear; }
     #overlay{ position:fixed; inset:0; pointer-events:none; z-index:6; }
@@ -63,7 +77,7 @@
       touch-action:none;
     }
 
-    /* ✅ Real lens look: thicker rim + highlights + refraction feel */
+    /* ✅ lens look (thicker rim + real glass feel) */
     #lens .glass{
       position:absolute;
       inset:0;
@@ -88,75 +102,39 @@
         inset 0 -30px 46px rgba(0,0,0,.22),
         inset 0 0 46px rgba(0,0,0,.14);
     }
-
     #lens .glass::before{
       content:"";
       position:absolute;
       inset:-55px;
       border-radius:999px;
       pointer-events:none;
-
       background:
         radial-gradient(circle at 30% 20%, rgba(255,255,255,.75), transparent 52%),
         radial-gradient(circle at 72% 78%, rgba(255,255,255,.20), transparent 60%),
         radial-gradient(circle at 52% 58%, rgba(255,255,255,.10), transparent 62%),
         linear-gradient(145deg, rgba(255,255,255,.16), transparent 64%);
-
       mix-blend-mode:screen;
       opacity:.70;
-      transform: translate3d(0,0,0) scale(1.02);
       filter: blur(0.4px);
     }
-
     #lens .glass::after{
       content:"";
       position:absolute;
       inset:0;
       border-radius:999px;
       pointer-events:none;
-
       background:
         radial-gradient(circle,
           rgba(255,255,255,.00) 58%,
           rgba(255,255,255,.14) 64%,
           rgba(0,0,0,.16) 78%,
           rgba(0,0,0,.26) 100%);
-
       box-shadow:
         inset 0 0 0 1px rgba(255,255,255,.10),
         inset 0 0 0 10px rgba(255,255,255,.05),
         inset 0 -14px 22px rgba(0,0,0,.18),
         inset 0 14px 22px rgba(255,255,255,.10);
     }
-
-    /* ✅ Magnified scene clipped inside the lens */
-    #lensMag{
-      position:absolute;
-      inset:0;
-      border-radius:999px;
-      overflow:hidden;
-      pointer-events:none;
-      z-index:1; /* behind highlights (::before/after), but above background */
-    }
-
-    /* fixed clone of the sentence that we scale around the lens center */
-    #sentenceMag{
-      position:fixed;
-      left:0; top:0;
-      width:min(1200px,92vw);
-      text-align:center;
-      font-family:var(--sans);
-      font-weight:650;
-      font-size:clamp(40px,6vw,96px);
-      line-height:1.08;
-      letter-spacing:-0.02em;
-      user-select:none;
-      z-index:0;
-      transform-origin: 0 0;
-      will-change: transform, filter;
-      filter: url(#lensWarp);
-    }
-    #sentenceMag .w.hideInk{ color:transparent; }
 
     .hint{
       position:fixed; left:16px; bottom:16px; z-index:20;
@@ -171,26 +149,12 @@
   </style>
 </head>
 <body>
-  <!-- SVG filter for refraction-like distortion -->
-  <svg width="0" height="0" style="position:absolute">
-    <filter id="lensWarp" x="-20%" y="-20%" width="140%" height="140%">
-      <!-- base blur to soften “glass” -->
-      <feGaussianBlur in="SourceGraphic" stdDeviation="0.25" result="blurred"/>
-      <!-- turbulence as displacement map -->
-      <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="7" result="noise"/>
-      <feDisplacementMap in="blurred" in2="noise" scale="10" xChannelSelector="R" yChannelSelector="G" />
-    </filter>
-  </svg>
-
   <div class="stage"><div id="sentence"></div></div>
   <div id="blackout"></div>
   <div id="overlay"></div>
 
   <div id="lens">
-    <div class="glass">
-      <!-- ✅ magnified clone lives here -->
-      <div id="lensMag"></div>
-    </div>
+    <div class="glass"></div>
   </div>
 
   <div class="hint">Drag lens over: beauty / merchandise / making</div>
@@ -208,7 +172,6 @@
   const overlay  = document.getElementById("overlay");
   const lens     = document.getElementById("lens");
   const blackout = document.getElementById("blackout");
-  const lensMag  = document.getElementById("lensMag");
 
   function cleanWord(w){ return w.replace(/[^\w']/g, ""); }
   function findTarget(word){
@@ -217,26 +180,32 @@
     return null;
   }
 
-  // build sentence
+  // sentence
   sentence.textContent = "";
   const words = TEXT.split(" ");
   words.forEach((w,i)=>{
     const sp=document.createElement("span");
     sp.className="w";
     sp.textContent=w;
+
+    // ✅ readability-safe micro motion params (very small)
+    const dur = 6.2 + Math.random()*4.2;       // 6.2s ~ 10.4s
+    const delay = -(Math.random()*6.0);        // negative for desync
+    const mx = (Math.random()*0.9 - 0.45);     // -0.45px ~ 0.45px
+    const my = (Math.random()*0.8 - 0.40);     // -0.40px ~ 0.40px
+    const mr = (Math.random()*0.18 - 0.09);    // -0.09deg ~ 0.09deg
+    sp.style.setProperty("--mfDur", dur.toFixed(2)+"s");
+    sp.style.setProperty("--mfDelay", delay.toFixed(2)+"s");
+    sp.style.setProperty("--mx", mx.toFixed(2)+"px");
+    sp.style.setProperty("--my", my.toFixed(2)+"px");
+    sp.style.setProperty("--mr", mr.toFixed(3)+"deg");
+
     const hit=findTarget(w);
     if(hit){ sp.dataset.hit="1"; sp.dataset.key=hit.key; sp.dataset.out=hit.out; }
+
     sentence.appendChild(sp);
     if(i!==words.length-1) sentence.appendChild(document.createTextNode(" "));
   });
-
-  // ✅ create magnified clone of sentence (DOM text magnification)
-  const magClone = sentence.cloneNode(true);
-  magClone.id = "sentenceMag";
-  lensMag.appendChild(magClone);
-
-  const spans = Array.from(sentence.querySelectorAll(".w"));
-  const magSpans = Array.from(magClone.querySelectorAll(".w"));
 
   // RNG
   function hashStr(s){
@@ -263,14 +232,14 @@
     return ctx;
   }
 
-  // --- measure + fit text to span box ---
+  // --- measure + fit text to span box (auto size) ---
   function measureTextBounds(text, font){
     const c = document.createElement("canvas");
     const ctx = c.getContext("2d");
     ctx.font = font;
     const m = ctx.measureText(text);
     const w = Math.ceil(m.width);
-    const h = Math.ceil((m.actualBoundingBoxAscent||0) + (m.actualBoundingBoxDescent||0)) || 1;
+    const h = Math.ceil((m.actualBoundingBoxAscent || 0) + (m.actualBoundingBoxDescent || 0)) || 1;
     const ascent = Math.ceil(m.actualBoundingBoxAscent || h*0.75);
     return { w, h, ascent };
   }
@@ -282,7 +251,7 @@
     const baseFont = `900 ${baseFontSize}px ${fontFamily}`;
 
     const base = measureTextBounds(text, baseFont);
-    const padFactor = 0.86; // overall tightness in span box
+    const padFactor = 0.86;
     const sx = (targetW * padFactor) / Math.max(1, base.w);
     const sy = (targetH * padFactor) / Math.max(1, base.h);
     const fitScale = Math.min(sx, sy);
@@ -330,7 +299,11 @@
             y: yy + jitterY,
             r0: 1.6 + rng()*0.9,
             ph: rng()*Math.PI*2,
-            pulse: 0.005 + rng()*0.010
+            pulse: 0.005 + rng()*0.010,
+            /* ✅ micro drift params (super subtle) */
+            ax: 0.18 + rng()*0.18,   // 0.18~0.36 px
+            ay: 0.16 + rng()*0.16,   // 0.16~0.32 px
+            spd: 0.55 + rng()*0.55   // speed multiplier
           });
         }
       }
@@ -342,14 +315,19 @@
     ctx.fillStyle = color;
     const tt = t*0.001;
     for(const p of pts){
+      // ✅ readability-safe micro drift (<= ~0.35px)
+      const ox = Math.sin(tt*(0.85*p.spd) + p.ph) * p.ax;
+      const oy = Math.cos(tt*(0.78*p.spd) + p.ph) * p.ay;
+
       const rr = p.r0 * (1 + Math.sin(tt*0.55 + p.ph) * p.pulse);
       ctx.beginPath();
-      ctx.arc(p.x, p.y, rr, 0, Math.PI*2);
+      ctx.arc(p.x + ox, p.y + oy, rr, 0, Math.PI*2);
       ctx.fill();
     }
   }
 
   // infection
+  const spans = Array.from(sentence.querySelectorAll(".w"));
   const infected = new Map();
   let infectionStart = null;
 
@@ -379,7 +357,7 @@
 
   function lensCenter(){
     const r = lens.getBoundingClientRect();
-    return { cx:r.left+r.width/2, cy:r.top+r.height/2, rad:r.width/2, rect:r };
+    return { cx:r.left+r.width/2, cy:r.top+r.height/2, rad:r.width/2 };
   }
   function isHit(span, lensInfo){
     const r = span.getBoundingClientRect();
@@ -416,34 +394,16 @@
 
   function clamp01(x){ return Math.max(0, Math.min(1, x)); }
 
-  // ✅ update displacement strength live via CSS var (SVG filter scale is static, so we use a second filter trick)
-  // To keep it simple: we keep scale=10 in SVG and adjust perceived strength by extra scale on content around the lens.
-  function getMag(){
-    const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--mag"));
-    return isFinite(v) ? v : 1.18;
-  }
-
   function tick(t){
     const now = performance.now();
-    const info = lensCenter();
-
-    // ✅ magnification transform: scale around lens center
-    const mag = getMag();
-    // transform = T(cx,cy) * S(mag) * T(-cx,-cy)
-    magClone.style.transform =
-      `translate(${info.cx}px, ${info.cy}px) scale(${mag}) translate(${-info.cx}px, ${-info.cy}px)`;
+    const lensInfo = lensCenter();
 
     // trigger
     for(const sp of spans){
       if(sp.dataset.hit!=="1") continue;
-      if(isHit(sp, info)){
+      if(isHit(sp, lensInfo)){
         const obj=ensureInfected(sp);
-
-        // hide original ink + hide magnified clone ink at same index
         sp.classList.add("hideInk");
-        const idx = spans.indexOf(sp);
-        if (idx >= 0 && magSpans[idx]) magSpans[idx].classList.add("hideInk");
-
         obj.canvas.classList.add("on");
       }
     }
