@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation — Viral Lens (Readable Blobs)</title>
+  <title>Appropriation — Viral Lens (Blob Text)</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -29,43 +29,22 @@
       position:relative;
       z-index:2;
     }
-
-    /* ✅ micro motion for ORIGINAL words only */
-    .w{
-      display:inline-block;
-      padding:0 .06em;
-      transform: translateZ(0);
-      will-change: transform;
-
-      animation-name: microFloat;
-      animation-duration: var(--mfDur, 7.2s);
-      animation-timing-function: ease-in-out;
-      animation-iteration-count: infinite;
-      animation-delay: var(--mfDelay, 0s);
-    }
-    /* ✅ when discovered, original ink is hidden and motion stops */
-    .w.hideInk{ color:transparent; animation:none; }
-
-    @keyframes microFloat{
-      0%   { transform: translate3d(0,0,0) rotate(0deg); }
-      33%  { transform: translate3d(var(--mx, .55px), var(--my, -.45px), 0) rotate(var(--mr, .10deg)); }
-      66%  { transform: translate3d(calc(var(--mx, .55px) * -0.65), calc(var(--my, -.45px) * -0.55), 0) rotate(calc(var(--mr, .10deg) * -0.65)); }
-      100% { transform: translate3d(0,0,0) rotate(0deg); }
-    }
-
-    @media (prefers-reduced-motion: reduce){
-      .w{ animation:none !important; }
-    }
+    .w{ display:inline-block; padding:0 .06em; }
+    .w.hideInk{ color:transparent; }
 
     #blackout{ position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; z-index:5; transition:opacity 90ms linear; }
     #overlay{ position:fixed; inset:0; pointer-events:none; z-index:6; }
 
-    canvas.viral{
-      position:absolute; left:0; top:0;
+    /* ✅ Blob SVG overlay for discovered words */
+    svg.blobWord{
+      position:absolute;
+      left:0; top:0;
       transform: translate(-50%,-55%);
-      opacity:0; transition:opacity 140ms linear;
+      opacity:0;
+      transition: opacity 140ms linear;
+      pointer-events:none;
     }
-    canvas.viral.on{ opacity:1; }
+    svg.blobWord.on{ opacity:1; }
 
     body.final #sentence{ opacity:0; transition:opacity 320ms ease; }
 
@@ -192,175 +171,17 @@
     const sp=document.createElement("span");
     sp.className="w";
     sp.textContent=w;
-
-    // ✅ micro motion params (original words only)
-    const dur = 6.2 + Math.random()*4.2;
-    const delay = -(Math.random()*6.0);
-    const mx = (Math.random()*1.4 - 0.70);
-    const my = (Math.random()*1.2 - 0.60);
-    const mr = (Math.random()*0.20 - 0.10);
-    sp.style.setProperty("--mfDur", dur.toFixed(2)+"s");
-    sp.style.setProperty("--mfDelay", delay.toFixed(2)+"s");
-    sp.style.setProperty("--mx", mx.toFixed(2)+"px");
-    sp.style.setProperty("--my", my.toFixed(2)+"px");
-    sp.style.setProperty("--mr", mr.toFixed(3)+"deg");
-
     const hit=findTarget(w);
     if(hit){ sp.dataset.hit="1"; sp.dataset.key=hit.key; sp.dataset.out=hit.out; }
-
     sentence.appendChild(sp);
     if(i!==words.length-1) sentence.appendChild(document.createTextNode(" "));
   });
 
-  // RNG
+  // deterministic-ish id
   function hashStr(s){
     let h=2166136261;
     for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
-    return h>>>0;
-  }
-  function makeRng(seed0){
-    let seed = seed0>>>0;
-    return function(){
-      seed ^= seed<<13; seed ^= seed>>>17; seed ^= seed<<5;
-      return (seed>>>0)/4294967295;
-    }
-  }
-
-  function ensureCanvas(canvas, w, h){
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    canvas.width = Math.floor(w*dpr);
-    canvas.height= Math.floor(h*dpr);
-    canvas.style.width = w+"px";
-    canvas.style.height= h+"px";
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    return ctx;
-  }
-
-  // --- measure + fit text to span box (auto size) ---
-  function measureTextBounds(text, font){
-    const c = document.createElement("canvas");
-    const ctx = c.getContext("2d");
-    ctx.font = font;
-    const m = ctx.measureText(text);
-    const w = Math.ceil(m.width);
-    const h = Math.ceil((m.actualBoundingBoxAscent || 0) + (m.actualBoundingBoxDescent || 0)) || 1;
-    const ascent = Math.ceil(m.actualBoundingBoxAscent || h*0.75);
-    return { w, h, ascent };
-  }
-
-  function precomputeParticles_FIT(text, targetW, targetH, seedKey){
-    const rng = makeRng(hashStr(seedKey));
-    const baseFontSize = 240;
-    const fontFamily = getComputedStyle(document.body).getPropertyValue("--sans") || "system-ui";
-    const baseFont = `900 ${baseFontSize}px ${fontFamily}`;
-
-    const base = measureTextBounds(text, baseFont);
-    const padFactor = 0.86;
-    const sx = (targetW * padFactor) / Math.max(1, base.w);
-    const sy = (targetH * padFactor) / Math.max(1, base.h);
-    const fitScale = Math.min(sx, sy);
-
-    const fontSize = Math.max(18, Math.min(340, Math.floor(baseFontSize * fitScale)));
-    const font = `900 ${fontSize}px ${fontFamily}`;
-    const m2 = measureTextBounds(text, font);
-
-    const pad = Math.round(Math.max(10, Math.min(36, Math.min(targetW, targetH) * 0.12)));
-    const w = Math.ceil(targetW + pad*2);
-    const h = Math.ceil(targetH + pad*2);
-
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const c = document.createElement("canvas");
-    c.width = Math.floor(w*dpr);
-    c.height = Math.floor(h*dpr);
-    const ctx = c.getContext("2d");
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.clearRect(0,0,w,h);
-
-    ctx.font = font;
-    ctx.textAlign="left";
-    ctx.textBaseline="alphabetic";
-    ctx.fillStyle="#000";
-
-    const x = Math.floor((w - m2.w)/2);
-    const y = Math.floor((h - m2.h)/2) + m2.ascent;
-    ctx.fillText(text, x, y);
-
-    const img = ctx.getImageData(0,0,c.width,c.height).data;
-
-    const pts = [];
-    const samplingDensity = 4;
-    for(let yy=0; yy<h; yy+=samplingDensity){
-      for(let xx=0; xx<w; xx+=samplingDensity){
-        const px = Math.floor(xx * dpr);
-        const py = Math.floor(yy * dpr);
-        const idx = (py * c.width + px) * 4;
-        const a = img[idx+3];
-        if(a > 128){
-          const jitterX = (rng() - 0.5) * samplingDensity * 0.55;
-          const jitterY = (rng() - 0.5) * samplingDensity * 0.55;
-          pts.push({
-            x: xx + jitterX,
-            y: yy + jitterY,
-            r0: 1.6 + rng()*0.9,
-            ph: rng()*Math.PI*2,
-            pulse: 0.005 + rng()*0.010,  // (will be disabled when frozen)
-            ax: 0.22 + rng()*0.18,        // (will be disabled when frozen)
-            ay: 0.20 + rng()*0.16,
-            spd: 0.55 + rng()*0.55
-          });
-        }
-      }
-    }
-    return { pts, w, h };
-  }
-
-  /* ✅ render supports "freeze" (discovered words should NOT move) */
-  function render(ctx, pts, t, color, freeze){
-    ctx.fillStyle = color;
-    const tt = t*0.001;
-    for(const p of pts){
-      const ox = freeze ? 0 : Math.sin(tt*(0.85*p.spd) + p.ph) * p.ax;
-      const oy = freeze ? 0 : Math.cos(tt*(0.78*p.spd) + p.ph) * p.ay;
-
-      const rr = freeze
-        ? p.r0
-        : (p.r0 * (1 + Math.sin(tt*0.55 + p.ph) * p.pulse));
-
-      ctx.beginPath();
-      ctx.arc(p.x + ox, p.y + oy, rr, 0, Math.PI*2);
-      ctx.fill();
-    }
-  }
-
-  // infection
-  const spans = Array.from(sentence.querySelectorAll(".w"));
-  const infected = new Map();
-  let infectionStart = null;
-
-  function ensureInfected(span){
-    const key = span.dataset.key;
-    if (infected.has(key)) return infected.get(key);
-
-    const canvas = document.createElement("canvas");
-    canvas.className = "viral";
-    overlay.appendChild(canvas);
-
-    const obj = {
-      key,
-      out: span.dataset.out,
-      span,
-      canvas,
-      startedAt: performance.now(),
-      prog: 0,
-      data: null,
-      lastTW: 0,
-      lastTH: 0,
-      freeze: true  // ✅ discovered words: frozen like your reference video
-    };
-    infected.set(key, obj);
-    if (!infectionStart) infectionStart = performance.now();
-    return obj;
+    return (h>>>0);
   }
 
   function lensCenter(){
@@ -372,6 +193,176 @@
     const wx = r.left + r.width/2;
     const wy = r.top  + r.height/2;
     return ((wx-lensInfo.cx)**2 + (wy-lensInfo.cy)**2) <= (lensInfo.rad**2);
+  }
+
+  // ✅ Create the blob SVG (video-like) — replaces particle style entirely
+  function makeBlobSVG(text, uniq){
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.classList.add("blobWord");
+
+    // Make it big enough; we'll size it dynamically in tick
+    svg.setAttribute("width", "600");
+    svg.setAttribute("height", "260");
+    svg.setAttribute("viewBox", "0 0 600 260");
+
+    const defs = document.createElementNS(svgNS, "defs");
+
+    // Filter: turbulence -> displacement -> blur -> threshold(goo) -> outline-ish
+    const filter = document.createElementNS(svgNS, "filter");
+    const fid = "blob_" + uniq;
+    filter.setAttribute("id", fid);
+    filter.setAttribute("x", "-20%");
+    filter.setAttribute("y", "-20%");
+    filter.setAttribute("width", "140%");
+    filter.setAttribute("height", "140%");
+    filter.setAttribute("color-interpolation-filters", "sRGB");
+
+    const turb = document.createElementNS(svgNS, "feTurbulence");
+    turb.setAttribute("type", "fractalNoise");
+    turb.setAttribute("baseFrequency", "0.012");
+    turb.setAttribute("numOctaves", "2");
+    turb.setAttribute("seed", String((uniq % 97) + 3));
+    turb.setAttribute("result", "noise");
+
+    // animate baseFrequency slightly (subtle organic motion)
+    const animBF = document.createElementNS(svgNS, "animate");
+    animBF.setAttribute("attributeName", "baseFrequency");
+    animBF.setAttribute("dur", "3.8s");
+    animBF.setAttribute("repeatCount", "indefinite");
+    animBF.setAttribute("values", "0.011;0.013;0.011");
+    turb.appendChild(animBF);
+
+    const disp = document.createElementNS(svgNS, "feDisplacementMap");
+    disp.setAttribute("in", "SourceGraphic");
+    disp.setAttribute("in2", "noise");
+    disp.setAttribute("scale", "18");
+    disp.setAttribute("xChannelSelector", "R");
+    disp.setAttribute("yChannelSelector", "G");
+    disp.setAttribute("result", "warped");
+
+    // animate displacement scale (super subtle)
+    const animSc = document.createElementNS(svgNS, "animate");
+    animSc.setAttribute("attributeName", "scale");
+    animSc.setAttribute("dur", "2.6s");
+    animSc.setAttribute("repeatCount", "indefinite");
+    animSc.setAttribute("values", "16;20;16");
+    disp.appendChild(animSc);
+
+    const blur = document.createElementNS(svgNS, "feGaussianBlur");
+    blur.setAttribute("in", "warped");
+    blur.setAttribute("stdDeviation", "1.25");
+    blur.setAttribute("result", "blurred");
+
+    // "goo" threshold via color matrix (high contrast)
+    const cm = document.createElementNS(svgNS, "feColorMatrix");
+    cm.setAttribute("in", "blurred");
+    cm.setAttribute("type", "matrix");
+    cm.setAttribute("values",
+      "18 0  0  0 -9 " +
+      "0  18 0  0 -9 " +
+      "0  0  18 0 -9 " +
+      "0  0  0  1  0"
+    );
+    cm.setAttribute("result", "goo");
+
+    // Outline-ish: dilate then composite out to get edge
+    const dil = document.createElementNS(svgNS, "feMorphology");
+    dil.setAttribute("in", "goo");
+    dil.setAttribute("operator", "dilate");
+    dil.setAttribute("radius", "2.2");
+    dil.setAttribute("result", "dilated");
+
+    const edge = document.createElementNS(svgNS, "feComposite");
+    edge.setAttribute("in", "dilated");
+    edge.setAttribute("in2", "goo");
+    edge.setAttribute("operator", "out");
+    edge.setAttribute("result", "edge");
+
+    // color the edge
+    const edgeColor = document.createElementNS(svgNS, "feColorMatrix");
+    edgeColor.setAttribute("in", "edge");
+    edgeColor.setAttribute("type", "matrix");
+    // edge black
+    edgeColor.setAttribute("values",
+      "0 0 0 0 0 " +
+      "0 0 0 0 0 " +
+      "0 0 0 0 0 " +
+      "0 0 0 1 0"
+    );
+    edgeColor.setAttribute("result", "edgeBlack");
+
+    // Merge: edge + goo fill
+    const merge = document.createElementNS(svgNS, "feMerge");
+    const m1 = document.createElementNS(svgNS, "feMergeNode");
+    m1.setAttribute("in", "edgeBlack");
+    const m2 = document.createElementNS(svgNS, "feMergeNode");
+    m2.setAttribute("in", "goo");
+    merge.appendChild(m1);
+    merge.appendChild(m2);
+
+    filter.appendChild(turb);
+    filter.appendChild(disp);
+    filter.appendChild(blur);
+    filter.appendChild(cm);
+    filter.appendChild(dil);
+    filter.appendChild(edge);
+    filter.appendChild(edgeColor);
+    filter.appendChild(merge);
+
+    defs.appendChild(filter);
+    svg.appendChild(defs);
+
+    // Group with filter
+    const g = document.createElementNS(svgNS, "g");
+    g.setAttribute("filter", `url(#${fid})`);
+
+    // Fill (match your page ink, not the old particle style)
+    const t = document.createElementNS(svgNS, "text");
+    t.setAttribute("x", "50%");
+    t.setAttribute("y", "50%");
+    t.setAttribute("text-anchor", "middle");
+    t.setAttribute("dominant-baseline", "middle");
+    t.setAttribute("fill", getComputedStyle(document.documentElement).getPropertyValue("--ink") || "#111");
+    t.setAttribute("font-family", getComputedStyle(document.documentElement).getPropertyValue("--sans") || "system-ui");
+    t.setAttribute("font-weight", "900");
+    t.textContent = text;
+
+    g.appendChild(t);
+    svg.appendChild(g);
+
+    // store references for resizing later
+    svg._textNode = t;
+
+    return svg;
+  }
+
+  // infection
+  const spans = Array.from(sentence.querySelectorAll(".w"));
+  const infected = new Map();
+  let infectionStart = null;
+
+  function ensureInfected(span){
+    const key = span.dataset.key;
+    if (infected.has(key)) return infected.get(key);
+
+    const uniq = hashStr(key + ":" + span.dataset.out);
+    const svg = makeBlobSVG(span.dataset.out, uniq);
+    overlay.appendChild(svg);
+
+    const obj = {
+      key,
+      out: span.dataset.out,
+      span,
+      svg,
+      startedAt: performance.now(),
+      prog: 0,
+      lastW: 0,
+      lastH: 0
+    };
+    infected.set(key, obj);
+    if (!infectionStart) infectionStart = performance.now();
+    return obj;
   }
 
   // drag lens
@@ -411,12 +402,12 @@
       if(sp.dataset.hit!=="1") continue;
       if(isHit(sp, lensInfo)){
         const obj=ensureInfected(sp);
-        sp.classList.add("hideInk");      // stops motion + hides ink
-        obj.canvas.classList.add("on");
+        sp.classList.add("hideInk");
+        obj.svg.classList.add("on");
       }
     }
 
-    // render infected canvases (FROZEN)
+    // layout blob SVGs
     for(const obj of infected.values()){
       obj.prog = clamp01(Math.max(obj.prog, (now-obj.startedAt)/6500));
 
@@ -424,37 +415,29 @@
       const cx = r.left + r.width/2;
       const cy = r.top  + r.height/2;
 
-      const targetW = Math.max(10, r.width  * 1.02);
-      const targetH = Math.max(10, r.height * 1.05);
+      // Size: match original word block with comfortable padding
+      const targetW = Math.max(160, r.width * 1.55);
+      const targetH = Math.max(120, r.height * 1.85);
 
-      const canvasW = Math.max(220, targetW * 1.35);
-      const canvasH = Math.max(140, targetH * 1.45);
+      const w = Math.round(targetW);
+      const h = Math.round(targetH);
 
-      obj.canvas.style.left = cx+"px";
-      obj.canvas.style.top  = cy+"px";
-      obj.canvas.style.transform = "translate(-50%,-55%)";
+      obj.svg.style.left = cx + "px";
+      obj.svg.style.top  = cy + "px";
+      obj.svg.style.transform = "translate(-50%,-55%)";
 
-      const cw = Math.round(canvasW);
-      const ch = Math.round(canvasH);
+      if (obj.lastW !== w || obj.lastH !== h){
+        obj.lastW = w; obj.lastH = h;
+        obj.svg.setAttribute("width", String(w));
+        obj.svg.setAttribute("height", String(h));
+        obj.svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
 
-      const tw = Math.round(targetW);
-      const th = Math.round(targetH);
-      if(!obj.data || obj.lastTW !== tw || obj.lastTH !== th){
-        obj.lastTW = tw; obj.lastTH = th;
-        obj.data = precomputeParticles_FIT(obj.out, tw, th, obj.key + ":" + obj.out);
+        // font size: tie to span height (keeps legibility)
+        const fs = Math.max(44, Math.min(260, Math.floor(r.height * 1.35)));
+        obj.svg._textNode.setAttribute("font-size", String(fs));
+        obj.svg._textNode.setAttribute("x", String(w/2));
+        obj.svg._textNode.setAttribute("y", String(h/2));
       }
-
-      const ctx = ensureCanvas(obj.canvas, cw, ch);
-      ctx.clearRect(0,0,cw,ch);
-
-      const dx = Math.floor((cw - obj.data.w)/2);
-      const dy = Math.floor((ch - obj.data.h)/2);
-      ctx.save();
-      ctx.translate(dx, dy);
-
-      const isFinal = document.body.classList.contains("final");
-      render(ctx, obj.data.pts, t, isFinal ? "#ffffff" : "#111111", obj.freeze);
-      ctx.restore();
     }
 
     // blackout → final
