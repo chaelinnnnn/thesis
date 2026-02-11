@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation — Viral Lens Infection (Stable Particles)</title>
+  <title>Appropriation — Viral Lens Infection (Readable + Stable)</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -131,7 +131,7 @@
     return null;
   }
 
-  // spacing-safe
+  // render sentence
   sentence.textContent = "";
   const words = TEXT.split(" ");
   words.forEach((w,i)=>{
@@ -144,7 +144,7 @@
     if(i!==words.length-1) sentence.appendChild(document.createTextNode(" "));
   });
 
-  // ----- RNG -----
+  // RNG
   function hashStr(s){
     let h=2166136261;
     for(let i=0;i<s.length;i++){ h^=s.charCodeAt(i); h=Math.imul(h,16777619); }
@@ -158,17 +158,7 @@
     }
   }
 
-  // heavy-tail radius (irregular)
-  function heavyTailRadius(rng, rMin, rMax){
-    const u = rng();
-    const k = 3.6;
-    const biased = 1 - Math.pow(u, k); // small-biased
-    let r = rMin + (rMax - rMin) * biased;
-    if (rng() < 0.10) r *= 1.5 + rng()*0.7; // occasional big blobs
-    return Math.min(rMax*2.2, r);
-  }
-
-  // ---- Build mask alpha map for text ----
+  // mask builder
   function buildMask(text, w, h, font){
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const c = document.createElement("canvas");
@@ -186,68 +176,62 @@
     return { img, mw:c.width, mh:c.height, dpr };
   }
 
-  // ✅ particles are computed ONCE (no shaking)
+  // irregular radius (mostly small, rare large)
+  function radius(rng){
+    const u = rng();
+    const smallBias = 1 - Math.pow(u, 4.4);
+    let r = 1.7 + smallBias * 5.1; // 1.7..6.8
+    if (rng() < 0.05) r *= 1.35 + rng()*0.5; // rare big
+    return r;
+  }
+
+  // ✅ precompute once + padding so it never clips
   function precomputeParticles(text, w, h, seedKey){
     const rng = makeRng(hashStr(seedKey));
 
-    const fontSize = Math.max(22, Math.min(110, Math.floor(h*0.62)));
+    // padding prevents clipping
+    const pad = Math.round(Math.max(26, Math.min(80, Math.min(w,h) * 0.22)));
+    const iw = w - pad*2;
+    const ih = h - pad*2;
+
+    const fontSize = Math.max(22, Math.min(110, Math.floor(ih*0.70)));
     const font = `900 ${fontSize}px ${getComputedStyle(document.body).getPropertyValue("--sans") || "system-ui"}`;
 
-    const mask = buildMask(text, w, h, font);
+    const mask = buildMask(text, iw, ih, font);
 
-    // sampling density: more inside, less near edge
-    const baseStep = 6;  // smaller = more readable
-    const particles = [];
+    // ✅ more dense => readable
+    const baseStep = 3.6; // 핵심 (3~4)
+    const pts = [];
 
-    for(let y=0; y<h; y+=baseStep){
-      for(let x=0; x<w; x+=baseStep){
-        // jittered sample to avoid grid look
-        const sx = x + (rng()*2-1)*2.2;
-        const sy = y + (rng()*2-1)*2.2;
+    for(let y=0; y<ih; y+=baseStep){
+      for(let x=0; x<iw; x+=baseStep){
+        const sx = x + (rng()*2-1)*1.6;
+        const sy = y + (rng()*2-1)*1.6;
 
-        const px = Math.floor(Math.max(0, Math.min(w-1, sx)) * mask.dpr);
-        const py = Math.floor(Math.max(0, Math.min(h-1, sy)) * mask.dpr);
+        const px = Math.floor(Math.max(0, Math.min(iw-1, sx)) * mask.dpr);
+        const py = Math.floor(Math.max(0, Math.min(ih-1, sy)) * mask.dpr);
         const idx = (py*mask.mw + px)*4;
         const a = mask.img[idx+3];
+        if (a < 12) continue;
 
-        if (a < 8) continue;
-
-        // alpha 기반 확률: 안쪽일수록 유지 -> 글자 형태 강화
         const inside = a/255;
-
-        // readable core boost
-        const keepProb = 0.55 + inside*0.40; // 0.55~0.95
+        const keepProb = 0.60 + inside*0.35;  // 0.60..0.95
         if (rng() > keepProb) continue;
 
-        const r = heavyTailRadius(rng, 2.2, 6.6);
+        const r = radius(rng);
 
-        particles.push({
-          x: sx, y: sy,
+        // ✅ no XY motion (readability). Only tiny radius breathing.
+        pts.push({
+          x: sx + pad,
+          y: sy + pad,
           r0: r,
-          // per-particle phase for subtle breathing only
           ph: rng()*Math.PI*2,
-          wob: 0.25 + rng()*0.35,  // very small motion
-          rr: 0.10 + rng()*0.20,   // very small radius pulse
+          pulse: 0.03 + rng()*0.03 // 3%~6%
         });
       }
     }
-    return particles;
-  }
 
-  function renderParticles(ctx, particles, t, color){
-    ctx.fillStyle = color;
-    // subtle breathing: does not move the whole word
-    const tt = t*0.001;
-
-    for(const p of particles){
-      const dx = Math.sin(tt*0.55 + p.ph) * p.wob;
-      const dy = Math.cos(tt*0.48 + p.ph) * p.wob;
-      const rr = p.r0 * (1 + Math.sin(tt*0.6 + p.ph) * p.rr);
-
-      ctx.beginPath();
-      ctx.arc(p.x + dx, p.y + dy, rr, 0, Math.PI*2);
-      ctx.fill();
-    }
+    return pts;
   }
 
   function ensureCanvas(canvas, w, h){
@@ -261,7 +245,19 @@
     return ctx;
   }
 
-  // ----- Infection -----
+  function render(ctx, pts, t, color){
+    ctx.fillStyle = color;
+    const tt = t*0.001;
+
+    for(const p of pts){
+      const rr = p.r0 * (1 + Math.sin(tt*0.55 + p.ph) * p.pulse); // ✅ radius only
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rr, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  // infection
   const spans = Array.from(sentence.querySelectorAll(".w"));
   const infected = new Map();
   let infectionStart = null;
@@ -281,7 +277,6 @@
       canvas,
       startedAt: performance.now(),
       prog: 0,
-      // particles will be built after we know final canvas size
       particles: null,
       lastW: 0,
       lastH: 0
@@ -334,7 +329,6 @@
     const now = performance.now();
     const lensInfo = lensCenter();
 
-    // discover
     for(const sp of spans){
       if(sp.dataset.hit!=="1") continue;
       if(isHit(sp, lensInfo)){
@@ -344,7 +338,6 @@
       }
     }
 
-    // render stable particles
     for(const obj of infected.values()){
       obj.prog = clamp01(Math.max(obj.prog, (now-obj.startedAt)/6500));
 
@@ -352,19 +345,18 @@
       const cx = r.left + r.width/2;
       const cy = r.top  + r.height/2;
 
-      // ✅ smaller and stable
+      // ✅ even smaller footprint + extra padding from precompute
       const baseScale = 1.00;
-      const grow = 0.12;
+      const grow = 0.08;
       const scale = baseScale + grow * obj.prog;
 
-      const w = Math.max(120, r.width * (scale * 1.06));
-      const h = Math.max(54,  r.height * (scale * 0.92));
+      const w = Math.max(140, r.width  * (scale * 1.18));
+      const h = Math.max(70,  r.height * (scale * 1.08));
 
       obj.canvas.style.left = cx+"px";
       obj.canvas.style.top  = cy+"px";
       obj.canvas.style.transform = "translate(-50%,-55%)";
 
-      // rebuild particles only if size changed (e.g., resize)
       const wInt = Math.round(w), hInt = Math.round(h);
       if (!obj.particles || obj.lastW !== wInt || obj.lastH !== hInt){
         obj.lastW = wInt; obj.lastH = hInt;
@@ -375,12 +367,9 @@
       ctx.clearRect(0,0,wInt,hInt);
 
       const isFinal = document.body.classList.contains("final");
-      const color = isFinal ? "#ffffff" : "#111111";
-
-      renderParticles(ctx, obj.particles, t, color);
+      render(ctx, obj.particles, t, isFinal ? "#ffffff" : "#111111");
     }
 
-    // blackout
     if(infectionStart){
       const seconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fadeSeconds")) || 10;
       const globalProg = clamp01((now - infectionStart) / (seconds*1000));
@@ -400,7 +389,6 @@
   window.addEventListener("resize", ()=>{
     const r=lens.getBoundingClientRect();
     setLensPos(r.left+r.width/2, r.top+r.height/2);
-    // particles will rebuild automatically because w/h changes
   });
 })();
 </script>
