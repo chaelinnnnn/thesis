@@ -44,13 +44,28 @@
       z-index: 9996;        /* 본문 위, 렌즈 아래 */
       pointer-events: none;
     }
+
+    /* ✅ “발견된 바이러스” 느낌: 더 큰 덩어리 + 왜곡 + 살아있는 미세움직임 */
     .pngWord{
       position: absolute;
       transform-origin: left bottom;
       opacity: 1;
-      filter: drop-shadow(0 8px 18px rgba(0,0,0,.18));
+      filter: drop-shadow(0 14px 28px rgba(0,0,0,.22));
       will-change: transform, left, top, width, height;
       user-select: none;
+
+      animation-name: popIn, wobble;
+      animation-duration: .18s, 2.6s;
+      animation-timing-function: ease-out, ease-in-out;
+      animation-iteration-count: 1, infinite;
+    }
+    @keyframes popIn{
+      from{ transform: translate(0,0) scale(.86) rotate(-1deg); opacity: 0; }
+      to  { transform: translate(0,0) scale(1)   rotate(0deg);  opacity: 1; }
+    }
+    @keyframes wobble{
+      0%,100%{ transform: translate(0,0) rotate(0deg); }
+      50%{ transform: translate(1px,-1px) rotate(.6deg); }
     }
 
     /* 토글 스와치 */
@@ -77,7 +92,7 @@
     #lens{
       position: fixed;
       left: 50%; top: 58%;
-      width: 460px; height: 460px; /* ✅ 렌즈 조금 키움 */
+      width: 460px; height: 460px; /* ✅ 렌즈 키움 */
       transform: translate(-50%,-50%);
       border-radius: 999px;
       background: rgba(255,255,255,.04);
@@ -90,6 +105,7 @@
     }
     body.lensOn #lens{ opacity:1; pointer-events:auto; }
 
+    /* 렌즈 유리 하이라이트 */
     #lens::before{
       content:""; position:absolute; inset:-40px;
       background:
@@ -103,6 +119,7 @@
       box-shadow: 0 0 0 1px rgba(0,0,0,.08) inset, 0 -10px 25px rgba(255,255,255,.25) inset;
       pointer-events:none;
     }
+
     #handle{
       position:absolute; left:50%; top:50%;
       transform: translate(170px, 170px);
@@ -138,7 +155,7 @@
   <div class="wrap">
     <header>
       <h1>전유된 대화: 내 욕망으로 번역되는 타자의 목소리</h1>
-      <p>우측 하단 스와치를 눌러 렌즈 ON/OFF. 렌즈 안의 특정 단어는 텍스트 대신 PNG(바이러스 글자)로 대체됩니다.</p>
+      <p>우측 하단 스와치를 눌러 렌즈 ON/OFF. 렌즈 안의 특정 단어는 텍스트 대신 PNG(바이러스 글자)로 크게 ‘발견’됩니다.</p>
     </header>
     <div id="content"></div>
   </div>
@@ -169,20 +186,14 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
 This is how little by little the forest disappeared from their land.
 `.trim();
 
-    // ✅ 중요: 네 레포 구조(스크린샷) 기준으로 PNG가 index.html과 같은 폴더(루트)에 있음
-    // 그래서 images/asset.png 가 아니라 ./asset.png 로 써야 로딩됨.
+    // ✅ 네 현재 레포 구조(스크린샷) 기준: PNG가 index.html과 같은 폴더(루트)
     const PNG_MAP = [
-      { re: /^forest$/i,     png: "./asset.png" },
-      { re: /^xapiri$/i,     png: "./intangible.png" },
-
-      // 나중에 파일 추가하면 아래처럼 이어서:
+      { re: /^forest$/i, png: "./asset.png" },
+      { re: /^xapiri$/i, png: "./intangible.png" },
+      // 나중에 추가:
       // { re: /^bee(s)?$/i,    png: "./product.png" },
       // { re: /^honey$/i,      png: "./revenue.png" },
       // { re: /^flower(s)?$/i, png: "./input.png" },
-      // { re: /^land$/i,       png: "./property.png" },
-      // { re: /^knowledge$/i,  png: "./patent.png" },
-      // { re: /^law$/i,        png: "./policy.png" },
-      // { re: /^memory$/i,     png: "./database.png" },
       // { re: /^medicine$/i,   png: "./product2.png" },
     ];
 
@@ -227,7 +238,7 @@ This is how little by little the forest disappeared from their land.
     renderTokenized(TEXT);
     const wordSpans = () => Array.from(content.querySelectorAll(".w"));
 
-    // ✅ 렌즈 안 단어만 PNG로 대체
+    // ✅ 렌즈 안 단어만 PNG로 “발견”되듯 크게 대체 + 약간 왜곡
     function updateLensEffect(){
       if (!lensOn) return;
 
@@ -255,19 +266,31 @@ This is how little by little the forest disappeared from their land.
             img.className = "pngWord";
             img.src = entry.png;
             img.alt = "";
+            img.draggable = false;
 
-            // ✅ 디버그: 로딩 실패 시 콘솔에 표시(경로 문제 바로 잡힘)
+            // 디버그: 경로 실패 시 콘솔 경고
             img.onerror = () => console.warn("PNG load failed:", entry.png);
 
-            // 단어 박스에 맞춰 스케일링(바이러스 느낌으로 약간 크게)
-            const scale = 1.35;
+            // ✅ 단어 길이에 따라 스케일 자동 보정(짧을수록 더 크게)
+            const len = orig.length;
+            const base = 2.35;                          // 전체 크기(발견 느낌)
+            const boost = Math.max(0, 8 - len) * 0.06;  // 짧은 단어 보너스
+            const scale = Math.min(2.75, base + boost); // 상한
+
             img.style.left = r.left + "px";
             img.style.top  = r.top + "px";
             img.style.width  = (r.width * scale) + "px";
             img.style.height = (r.height * scale) + "px";
 
-            // 약간 위/왼쪽으로 당겨서 “덮어씌우는” 느낌
-            img.style.transform = `translate(${-r.width*(scale-1)*0.18}px, ${-r.height*(scale-1)*0.42}px)`;
+            // ✅ 단어를 덮어쓰는 배치(강하게 위/왼쪽으로)
+            const dx = -r.width  * (scale - 1) * 0.28;
+            const dy = -r.height * (scale - 1) * 0.65;
+
+            // ✅ 약간의 왜곡(회전/스큐) — “발견된 바이러스” 느낌
+            const rot = (Math.random() * 2 - 1) * 1.8;   // -1.8 ~ 1.8deg
+            const skew = (Math.random() * 2 - 1) * 1.2;  // -1.2 ~ 1.2deg
+
+            img.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg) skewX(${skew}deg)`;
 
             pngLayer.appendChild(img);
           } else {
