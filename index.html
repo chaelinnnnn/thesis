@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation — Viral Lens Infection (Irregular)</title>
+  <title>Appropriation — Viral Lens Infection (Stable Particles)</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -29,7 +29,7 @@
       position:relative;
       z-index:2;
     }
-    .w{ display:inline-block; position:relative; padding:0 .06em; }
+    .w{ display:inline-block; padding:0 .06em; }
     .w.hideInk{ color:transparent; }
 
     #blackout{ position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; z-index:5; transition:opacity 120ms linear; }
@@ -45,14 +45,9 @@
     body.final #sentence{ opacity:0; transition:opacity 380ms ease; }
 
     #lens{
-      position:fixed;
-      width:var(--lensSize); height:var(--lensSize);
-      border-radius:999px;
-      left:72%; top:44%;
-      transform:translate(-50%,-50%);
-      z-index:10;
-      pointer-events:auto;
-      touch-action:none;
+      position:fixed; width:var(--lensSize); height:var(--lensSize); border-radius:999px;
+      left:72%; top:44%; transform:translate(-50%,-50%);
+      z-index:10; pointer-events:auto; touch-action:none;
     }
     #lens .glass{
       position:absolute; inset:0; border-radius:999px; overflow:hidden;
@@ -163,91 +158,107 @@
     }
   }
 
-  // heavy-tail radius: 작은 게 많고 큰 게 가끔 (레퍼런스 느낌)
+  // heavy-tail radius (irregular)
   function heavyTailRadius(rng, rMin, rMax){
-    // u^k 형태로 작은 값에 몰리게 + 가끔 큰 값
     const u = rng();
-    const k = 3.2;                 // 클수록 작은 반지름 많아짐
-    const biased = 1 - Math.pow(u, k);
+    const k = 3.6;
+    const biased = 1 - Math.pow(u, k); // small-biased
     let r = rMin + (rMax - rMin) * biased;
-
-    // 아주 가끔 큰 덩어리
-    if (rng() < 0.08) r *= 1.6 + rng()*0.6;
-
+    if (rng() < 0.10) r *= 1.5 + rng()*0.7; // occasional big blobs
     return Math.min(rMax*2.2, r);
   }
 
-  // ----- Irregular blob draw -----
-  function drawIrregularBlob(canvas, text, w, h, opts){
+  // ---- Build mask alpha map for text ----
+  function buildMask(text, w, h, font){
     const dpr = Math.max(1, window.devicePixelRatio || 1);
-    canvas.width  = Math.floor(w*dpr);
-    canvas.height = Math.floor(h*dpr);
-    canvas.style.width = w+"px";
-    canvas.style.height= h+"px";
-
-    const ctx = canvas.getContext("2d");
+    const c = document.createElement("canvas");
+    c.width = Math.floor(w*dpr);
+    c.height= Math.floor(h*dpr);
+    const ctx = c.getContext("2d");
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.clearRect(0,0,w,h);
+    ctx.font = font;
+    ctx.textAlign="center";
+    ctx.textBaseline="middle";
+    ctx.fillStyle="#000";
+    ctx.fillText(text, w/2, h/2);
+    const img = ctx.getImageData(0,0,c.width,c.height).data;
+    return { img, mw:c.width, mh:c.height, dpr };
+  }
 
-    // mask
+  // ✅ particles are computed ONCE (no shaking)
+  function precomputeParticles(text, w, h, seedKey){
+    const rng = makeRng(hashStr(seedKey));
+
     const fontSize = Math.max(22, Math.min(110, Math.floor(h*0.62)));
-    const font = `${opts.weight} ${fontSize}px ${opts.fontFamily}`;
+    const font = `900 ${fontSize}px ${getComputedStyle(document.body).getPropertyValue("--sans") || "system-ui"}`;
 
-    const mask = document.createElement("canvas");
-    mask.width = Math.floor(w*dpr);
-    mask.height= Math.floor(h*dpr);
-    const m = mask.getContext("2d");
-    m.setTransform(dpr,0,0,dpr,0,0);
-    m.clearRect(0,0,w,h);
-    m.font = font;
-    m.textAlign="center";
-    m.textBaseline="middle";
-    m.fillStyle="#000";
-    m.fillText(text, w/2, h/2);
+    const mask = buildMask(text, w, h, font);
 
-    const img = m.getImageData(0,0,mask.width,mask.height).data;
+    // sampling density: more inside, less near edge
+    const baseStep = 6;  // smaller = more readable
+    const particles = [];
 
-    const rng = makeRng(hashStr(opts.seedKey));
+    for(let y=0; y<h; y+=baseStep){
+      for(let x=0; x<w; x+=baseStep){
+        // jittered sample to avoid grid look
+        const sx = x + (rng()*2-1)*2.2;
+        const sy = y + (rng()*2-1)*2.2;
 
-    ctx.fillStyle = opts.color;
+        const px = Math.floor(Math.max(0, Math.min(w-1, sx)) * mask.dpr);
+        const py = Math.floor(Math.max(0, Math.min(h-1, sy)) * mask.dpr);
+        const idx = (py*mask.mw + px)*4;
+        const a = mask.img[idx+3];
 
-    // ✅ 단어는 고정(흔들림 X). 대신 입자 내부만 아주 미세하게 숨쉬기.
-    const breathe = 0.6 + 0.4*Math.sin(opts.t*0.35 + opts.phase);
+        if (a < 8) continue;
 
-    // 규칙성 제거: grid step을 유지하되 샘플링 위치를 랜덤하게 흩뿌림
-    const step = opts.step;
-    const jitter = opts.jitter * breathe;
+        // alpha 기반 확률: 안쪽일수록 유지 -> 글자 형태 강화
+        const inside = a/255;
 
-    for(let yy=0; yy<h; yy+=step){
-      for(let xx=0; xx<w; xx+=step){
-        // 샘플 좌표 자체를 흔들어서 격자 티를 없앰
-        const sx = xx + (rng()*2-1)*jitter;
-        const sy = yy + (rng()*2-1)*jitter;
+        // readable core boost
+        const keepProb = 0.55 + inside*0.40; // 0.55~0.95
+        if (rng() > keepProb) continue;
 
-        const px = Math.floor(Math.max(0, Math.min(w-1, sx)) * dpr);
-        const py = Math.floor(Math.max(0, Math.min(h-1, sy)) * dpr);
-        const idx = (py*mask.width + px)*4;
-        const a = img[idx+3];
+        const r = heavyTailRadius(rng, 2.2, 6.6);
 
-        if (a > 10){
-          // 중심부일수록 더 많이 찍힘
-          const localProb = opts.keepProb * (a/255);
-          if (rng() < localProb){
-            const rr = heavyTailRadius(rng, opts.rMin, opts.rMax);
-
-            // ✅ 클러스터링: 어떤 점은 근처 점들을 더 끌어모아 “덩어리”를 만들기
-            const cluster = (rng() < 0.22) ? (1.8 + rng()*1.4) : 1.0;
-
-            const jx = (rng()*2-1) * jitter * cluster;
-            const jy = (rng()*2-1) * jitter * cluster;
-
-            ctx.beginPath();
-            ctx.arc(sx + jx, sy + jy, rr, 0, Math.PI*2);
-            ctx.fill();
-          }
-        }
+        particles.push({
+          x: sx, y: sy,
+          r0: r,
+          // per-particle phase for subtle breathing only
+          ph: rng()*Math.PI*2,
+          wob: 0.25 + rng()*0.35,  // very small motion
+          rr: 0.10 + rng()*0.20,   // very small radius pulse
+        });
       }
     }
+    return particles;
+  }
+
+  function renderParticles(ctx, particles, t, color){
+    ctx.fillStyle = color;
+    // subtle breathing: does not move the whole word
+    const tt = t*0.001;
+
+    for(const p of particles){
+      const dx = Math.sin(tt*0.55 + p.ph) * p.wob;
+      const dy = Math.cos(tt*0.48 + p.ph) * p.wob;
+      const rr = p.r0 * (1 + Math.sin(tt*0.6 + p.ph) * p.rr);
+
+      ctx.beginPath();
+      ctx.arc(p.x + dx, p.y + dy, rr, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function ensureCanvas(canvas, w, h){
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(w*dpr);
+    canvas.height= Math.floor(h*dpr);
+    canvas.style.width = w+"px";
+    canvas.style.height= h+"px";
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return ctx;
   }
 
   // ----- Infection -----
@@ -270,7 +281,10 @@
       canvas,
       startedAt: performance.now(),
       prog: 0,
-      phase: Math.random()*10
+      // particles will be built after we know final canvas size
+      particles: null,
+      lastW: 0,
+      lastH: 0
     };
     infected.set(key, obj);
     if (!infectionStart) infectionStart = performance.now();
@@ -288,7 +302,7 @@
     return ((wx-lensInfo.cx)**2 + (wy-lensInfo.cy)**2) <= (lensInfo.rad**2);
   }
 
-  // drag
+  // drag lens
   let dragging=false, offX=0, offY=0;
   function setLensPos(x,y){
     const size = lens.getBoundingClientRect().width;
@@ -320,7 +334,7 @@
     const now = performance.now();
     const lensInfo = lensCenter();
 
-    // 발견
+    // discover
     for(const sp of spans){
       if(sp.dataset.hit!=="1") continue;
       if(isHit(sp, lensInfo)){
@@ -330,47 +344,43 @@
       }
     }
 
-    // 렌더: ✅ 크기 더 작게 + 흔들림 제거 + 입자 불규칙
+    // render stable particles
     for(const obj of infected.values()){
-      const dt = (now - obj.startedAt) / 6500;
-      obj.prog = clamp01(Math.max(obj.prog, dt));
+      obj.prog = clamp01(Math.max(obj.prog, (now-obj.startedAt)/6500));
 
       const r = obj.span.getBoundingClientRect();
       const cx = r.left + r.width/2;
       const cy = r.top  + r.height/2;
 
-      // ✅ 더 작게: 거의 원래 단어 자리에서만
+      // ✅ smaller and stable
       const baseScale = 1.00;
-      const grow = 0.18;              // 아주 조금만 커짐
+      const grow = 0.12;
       const scale = baseScale + grow * obj.prog;
 
-      const w = Math.max(130, r.width * (scale * 1.10));
-      const h = Math.max(60,  r.height * (scale * 0.95));
+      const w = Math.max(120, r.width * (scale * 1.06));
+      const h = Math.max(54,  r.height * (scale * 0.92));
 
       obj.canvas.style.left = cx+"px";
       obj.canvas.style.top  = cy+"px";
-      obj.canvas.style.transform = "translate(-50%,-55%)"; // ✅ 단어 전체 흔들림 제거
+      obj.canvas.style.transform = "translate(-50%,-55%)";
+
+      // rebuild particles only if size changed (e.g., resize)
+      const wInt = Math.round(w), hInt = Math.round(h);
+      if (!obj.particles || obj.lastW !== wInt || obj.lastH !== hInt){
+        obj.lastW = wInt; obj.lastH = hInt;
+        obj.particles = precomputeParticles(obj.out, wInt, hInt, obj.key + ":" + obj.out);
+      }
+
+      const ctx = ensureCanvas(obj.canvas, wInt, hInt);
+      ctx.clearRect(0,0,wInt,hInt);
 
       const isFinal = document.body.classList.contains("final");
+      const color = isFinal ? "#ffffff" : "#111111";
 
-      drawIrregularBlob(obj.canvas, obj.out, Math.round(w), Math.round(h), {
-        t: t*0.001,
-        seedKey: obj.key + ":" + obj.out + ":" + (obj.prog*100).toFixed(1),
-        phase: obj.phase,
-        color: isFinal ? "#ffffff" : "#111111",
-        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-        weight: 900,
-
-        // ✅ 불규칙 입자 핵심값
-        step: 12 - Math.floor(obj.prog*2), // 12 -> 10
-        rMin: 2.6 + obj.prog*0.2,
-        rMax: 7.4 + obj.prog*0.7,
-        keepProb: 0.66 + obj.prog*0.10,
-        jitter: 3.2 + obj.prog*0.8
-      });
+      renderParticles(ctx, obj.particles, t, color);
     }
 
-    // 블랙 전환
+    // blackout
     if(infectionStart){
       const seconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fadeSeconds")) || 10;
       const globalProg = clamp01((now - infectionStart) / (seconds*1000));
@@ -390,6 +400,7 @@
   window.addEventListener("resize", ()=>{
     const r=lens.getBoundingClientRect();
     setLensPos(r.left+r.width/2, r.top+r.height/2);
+    // particles will rebuild automatically because w/h changes
   });
 })();
 </script>
