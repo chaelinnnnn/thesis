@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation — Viral Lens Infection (Edge + Core, No Blob)</title>
+  <title>Appropriation — Viral Lens Infection (Edge-extracted)</title>
   <style>
     :root{
       --bg:#ffffff;
       --ink:#111;
       --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       --lensSize: 520px;
-      --fadeSeconds: 10;
+      --fadeSeconds: 8; /* faster to black */
     }
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
@@ -32,18 +32,17 @@
     .w{ display:inline-block; padding:0 .06em; }
     .w.hideInk{ color:transparent; }
 
-    #blackout{ position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; z-index:5; transition:opacity 120ms linear; }
+    #blackout{ position:fixed; inset:0; background:#000; opacity:0; pointer-events:none; z-index:5; transition:opacity 100ms linear; }
     #overlay{ position:fixed; inset:0; pointer-events:none; z-index:6; }
 
     canvas.viral{
       position:absolute; left:0; top:0;
       transform: translate(-50%,-55%);
-      opacity:0; transition:opacity 160ms linear;
-      filter: drop-shadow(0 0 0 rgba(0,0,0,0)); /* keep crisp */
+      opacity:0; transition:opacity 140ms linear;
     }
     canvas.viral.on{ opacity:1; }
 
-    body.final #sentence{ opacity:0; transition:opacity 380ms ease; }
+    body.final #sentence{ opacity:0; transition:opacity 320ms ease; }
 
     #lens{
       position:fixed; width:var(--lensSize); height:var(--lensSize); border-radius:999px;
@@ -132,7 +131,7 @@
     return null;
   }
 
-  // sentence with safe spacing
+  // render sentence
   sentence.textContent = "";
   const words = TEXT.split(" ");
   words.forEach((w,i)=>{
@@ -159,6 +158,18 @@
     }
   }
 
+  function ensureCanvas(canvas, w, h){
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(w*dpr);
+    canvas.height= Math.floor(h*dpr);
+    canvas.style.width = w+"px";
+    canvas.style.height= h+"px";
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    return { ctx, dpr };
+  }
+
+  // offscreen mask at device scale
   function buildMask(text, w, h, font){
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const c = document.createElement("canvas");
@@ -176,118 +187,105 @@
     return { img, mw:c.width, mh:c.height, dpr };
   }
 
-  // small 중심 + rare big (덩어리 방지)
-  function radius(rng){
-    const u = rng();
-    const smallBias = 1 - Math.pow(u, 5.2);
-    let r = 1.3 + smallBias * 3.4;     // 1.3..4.7
-    if (rng() < 0.03) r *= 1.25 + rng()*0.35;
-    return r;
+  function A(mask, x, y){
+    if (x<0||y<0||x>=mask.mw||y>=mask.mh) return 0;
+    return mask.img[(y*mask.mw + x)*4 + 3];
   }
 
-  function alphaAt(mask, x, y, iw, ih){
-    const px = Math.floor(Math.max(0, Math.min(iw-1, x)) * mask.dpr);
-    const py = Math.floor(Math.max(0, Math.min(ih-1, y)) * mask.dpr);
-    const idx = (py*mask.mw + px)*4;
-    return mask.img[idx+3];
-  }
-
-  // ✅ edgeScore: 주변 알파 차이가 크면 가장자리
-  function edgeScore(mask, x, y, iw, ih){
-    const a0 = alphaAt(mask, x, y, iw, ih);
-    const s = 3.0; // sample offset (in CSS px)
-    const a1 = alphaAt(mask, x+s, y,   iw, ih);
-    const a2 = alphaAt(mask, x-s, y,   iw, ih);
-    const a3 = alphaAt(mask, x,   y+s, iw, ih);
-    const a4 = alphaAt(mask, x,   y-s, iw, ih);
-    const dif = (Math.abs(a0-a1)+Math.abs(a0-a2)+Math.abs(a0-a3)+Math.abs(a0-a4)) / (4*255);
-    return dif; // 0..~1
-  }
-
-  // ✅ Edge + Core sampling (내부 과밀 방지)
-  function precomputeParticles(text, w, h, seedKey){
+  // ✅ 핵심: edge 픽셀을 직접 뽑아 포인트 생성
+  function precomputeParticles_EDGE(text, w, h, seedKey){
     const rng = makeRng(hashStr(seedKey));
 
-    const pad = Math.round(Math.max(30, Math.min(90, Math.min(w,h) * 0.24)));
+    const pad = Math.round(Math.max(40, Math.min(110, Math.min(w,h) * 0.26)));
     const iw = w - pad*2;
     const ih = h - pad*2;
 
-    const fontSize = Math.max(26, Math.min(132, Math.floor(ih*0.74)));
+    const fontSize = Math.max(30, Math.min(150, Math.floor(ih*0.78)));
     const font = `900 ${fontSize}px ${getComputedStyle(document.body).getPropertyValue("--sans") || "system-ui"}`;
     const mask = buildMask(text, iw, ih, font);
 
-    // 덩어리 방지용 샘플 간격 (조금 성기게) + 윤곽은 edge로 살림
-    const baseStep = 4.6;
+    // thresholds
+    const T_IN  = 26;   // inside alpha threshold
+    const T_EDGE= 8;    // neighbor alpha threshold for boundary
 
-    const pts = [];
-    for(let y=0; y<ih; y+=baseStep){
-      for(let x=0; x<iw; x+=baseStep){
-        // jitter to avoid grid
-        const sx = x + (rng()*2-1)*1.6;
-        const sy = y + (rng()*2-1)*1.6;
+    // sampling steps (in mask pixels)
+    const stepEdge = Math.max(2, Math.floor(mask.dpr * 2)); // denser edge
+    const stepCore = Math.max(3, Math.floor(mask.dpr * 3)); // sparser core
 
-        const a = alphaAt(mask, sx, sy, iw, ih);
-        if (a < 14) continue;
+    const edgePts = [];
+    const corePts = [];
 
-        const inside = a/255;          // 0..1
-        const e = edgeScore(mask, sx, sy, iw, ih); // 0..1
+    // scan mask space (device px)
+    for(let y=0; y<mask.mh; y+=stepEdge){
+      for(let x=0; x<mask.mw; x+=stepEdge){
+        const a0 = A(mask,x,y);
+        if (a0 < T_IN) continue;
 
-        // ✅ 핵심: edge는 살리고, 완전 내부는 죽이기
-        // inside가 너무 높고(edge가 낮으면) = solid interior -> 확률 크게 낮춤
-        let keep = 0.0;
+        // edge test: any neighbor is outside-ish
+        const n =
+          (A(mask,x+1,y) < T_EDGE) ||
+          (A(mask,x-1,y) < T_EDGE) ||
+          (A(mask,x,y+1) < T_EDGE) ||
+          (A(mask,x,y-1) < T_EDGE) ||
+          (A(mask,x+2,y) < T_EDGE) ||
+          (A(mask,x-2,y) < T_EDGE) ||
+          (A(mask,x,y+2) < T_EDGE) ||
+          (A(mask,x,y-2) < T_EDGE);
 
-        // edge boost: 윤곽선(획 가장자리)에서 점을 많이 찍어 "글자 인식" 확보
-        const edgeBoost = Math.min(1, e * 3.2); // edge 민감도
+        if (!n) continue;
 
-        // core: 중간~높은 알파에서 약간만 남겨 질감 유지
-        // (너무 높은 알파=완전 내부는 억제)
-        const coreBand = (inside > 0.40 && inside < 0.86) ? 1 : 0;
-        const solidInterior = (inside >= 0.86 && edgeBoost < 0.25) ? 1 : 0;
-
-        // base keep:
-        // - edge면 0.55~0.95
-        // - core면 0.18~0.42
-        // - solid interior면 0.04~0.10
-        keep += 0.55 * edgeBoost;
-        keep += coreBand ? (0.18 + 0.24 * inside) : 0.0;
-        keep = solidInterior ? (0.04 + 0.06 * edgeBoost) : keep;
-
-        // small random variation
-        keep *= (0.88 + rng()*0.22);
-
-        if (rng() > keep) continue;
-
-        const r = radius(rng);
-
-        pts.push({
-          x: sx + pad,
-          y: sy + pad,
-          r0: r,
-          ph: rng()*Math.PI*2,
-          pulse: 0.02 + rng()*0.03 // radius만 미세 숨쉬기 (요동 X)
-        });
+        // convert to CSS px in local box + jitter
+        const px = (x / mask.dpr) + (rng()*2-1)*0.9;
+        const py = (y / mask.dpr) + (rng()*2-1)*0.9;
+        edgePts.push({ x:px + pad, y:py + pad });
       }
     }
 
-    return pts;
-  }
+    // core: mid alpha band only (질감), 낮은 확률
+    for(let y=0; y<mask.mh; y+=stepCore){
+      for(let x=0; x<mask.mw; x+=stepCore){
+        const a0 = A(mask,x,y);
+        if (a0 < 80 || a0 > 235) continue; // mid band only
+        if (rng() > 0.18) continue;        // keep low → no blob
+        const px = (x / mask.dpr) + (rng()*2-1)*1.2;
+        const py = (y / mask.dpr) + (rng()*2-1)*1.2;
+        corePts.push({ x:px + pad, y:py + pad });
+      }
+    }
 
-  function ensureCanvas(canvas, w, h){
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    canvas.width = Math.floor(w*dpr);
-    canvas.height= Math.floor(h*dpr);
-    canvas.style.width = w+"px";
-    canvas.style.height= h+"px";
-    const ctx = canvas.getContext("2d");
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    return ctx;
+    // assign radii: mostly small, edge slightly smaller for crisp readability
+    function rEdge(){
+      const u = rng();
+      const b = 1 - Math.pow(u, 5.8);
+      let r = 1.1 + b*2.6;        // 1.1..3.7
+      if (rng() < 0.03) r *= 1.35;
+      return r;
+    }
+    function rCore(){
+      const u = rng();
+      const b = 1 - Math.pow(u, 4.6);
+      let r = 1.3 + b*3.1;        // 1.3..4.4
+      if (rng() < 0.02) r *= 1.25;
+      return r;
+    }
+
+    // final particles with tiny radius breathing only
+    const pts = [];
+    for (const p of edgePts){
+      pts.push({ x:p.x, y:p.y, r0:rEdge(), ph:rng()*Math.PI*2, pulse:0.015 + rng()*0.02 });
+    }
+    for (const p of corePts){
+      pts.push({ x:p.x, y:p.y, r0:rCore(), ph:rng()*Math.PI*2, pulse:0.010 + rng()*0.02 });
+    }
+
+    return pts;
   }
 
   function render(ctx, pts, t, color){
     ctx.fillStyle = color;
     const tt = t*0.001;
     for(const p of pts){
-      const rr = p.r0 * (1 + Math.sin(tt*0.55 + p.ph) * p.pulse);
+      const rr = p.r0 * (1 + Math.sin(tt*0.55 + p.ph) * p.pulse); // radius-only
       ctx.beginPath();
       ctx.arc(p.x, p.y, rr, 0, Math.PI*2);
       ctx.fill();
@@ -366,15 +364,17 @@
     const now = performance.now();
     const lensInfo = lensCenter();
 
+    // trigger infection
     for(const sp of spans){
       if(sp.dataset.hit!=="1") continue;
       if(isHit(sp, lensInfo)){
         const obj=ensureInfected(sp);
-        sp.classList.add("hideInk");     // 원래 글자 자리 가림
+        sp.classList.add("hideInk");
         obj.canvas.classList.add("on");
       }
     }
 
+    // render infected canvases
     for(const obj of infected.values()){
       obj.prog = clamp01(Math.max(obj.prog, (now-obj.startedAt)/6500));
 
@@ -382,13 +382,13 @@
       const cx = r.left + r.width/2;
       const cy = r.top  + r.height/2;
 
-      // ✅ 단어는 더 크게 (너무 작아졌던 문제 해결)
+      // big & readable
       const baseScale = 1.00;
       const grow = 0.10;
       const scale = baseScale + grow * obj.prog;
 
-      const w = Math.max(240, r.width  * (scale * 1.60));
-      const h = Math.max(140, r.height * (scale * 1.38));
+      const w = Math.max(300, r.width  * (scale * 1.95));
+      const h = Math.max(170, r.height * (scale * 1.55));
 
       obj.canvas.style.left = cx+"px";
       obj.canvas.style.top  = cy+"px";
@@ -397,21 +397,21 @@
       const wInt = Math.round(w), hInt = Math.round(h);
       if (!obj.particles || obj.lastW !== wInt || obj.lastH !== hInt){
         obj.lastW = wInt; obj.lastH = hInt;
-        obj.particles = precomputeParticles(obj.out, wInt, hInt, obj.key + ":" + obj.out);
+        obj.particles = precomputeParticles_EDGE(obj.out, wInt, hInt, obj.key + ":" + obj.out);
       }
 
-      const ctx = ensureCanvas(obj.canvas, wInt, hInt);
+      const { ctx } = ensureCanvas(obj.canvas, wInt, hInt);
       ctx.clearRect(0,0,wInt,hInt);
 
       const isFinal = document.body.classList.contains("final");
       render(ctx, obj.particles, t, isFinal ? "#ffffff" : "#111111");
     }
 
-    // blackout (원하면 더 빠르게: --fadeSeconds 줄이면 됨)
+    // blackout → final
     if(infectionStart){
-      const seconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fadeSeconds")) || 10;
+      const seconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fadeSeconds")) || 8;
       const globalProg = clamp01((now - infectionStart) / (seconds*1000));
-      blackout.style.opacity = String(Math.pow(globalProg, 0.55));
+      blackout.style.opacity = String(Math.pow(globalProg, 0.52));
 
       if(globalProg >= 0.995 && !document.body.classList.contains("final")){
         document.body.classList.add("final");
