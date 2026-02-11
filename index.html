@@ -1,275 +1,180 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Internal Infection — Overwrite Layer</title>
-  <style>
-    :root{
-      --bg:#ffffff;
-      --ink:#111;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
-      --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    }
-    *{ box-sizing:border-box; }
-    html,body{ height:100%; }
-    body{
-      margin:0;
-      background: var(--bg);
-      color: var(--ink);
-      overflow:hidden;
-    }
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Appropriation Infection</title>
 
-    /* Center sentence */
-    #wrap{
-      position:fixed;
-      inset:0;
-      display:grid;
-      place-items:center;
-      padding: 24px;
-    }
+<style>
+html,body{
+  margin:0;
+  background:#f5f5f5;
+  font-family:monospace;
+  overflow:hidden;
+}
 
-    #sentence{
-      width: min(1100px, 92vw);
-      text-align:center;
-      font-family: var(--sans);
-      font-weight: 650;
-      font-size: clamp(28px, 4vw, 58px);
-      line-height: 1.18;
-      letter-spacing: -0.02em;
-      padding: 16px 18px;
-      border-radius: 14px;
-      background: rgba(255,255,255,.55);
-      border: 1px solid rgba(0,0,0,.06);
-      box-shadow: 0 22px 70px rgba(0,0,0,.08);
-      backdrop-filter: blur(4px);
-    }
+#stage{
+  position:relative;
+  width:100vw;
+  height:100vh;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+}
 
-    /* token wrapper */
-    .t{
-      display:inline-block;
-      position:relative;
-      padding: 0 .06em;
-    }
+#sentence{
+  font-size:40px;
+  line-height:1.4;
+  text-align:center;
+  width:900px;
+  position:relative;
+}
 
-    /* overlay label that "infects" the original */
-    .overlay{
-      position:absolute;
-      left:50%;
-      top:50%;
-      transform: translate(-50%,-52%) scale(.92);
-      transform-origin:center;
-      font-family: var(--mono);
-      font-weight: 900;
-      letter-spacing: .02em;
-      opacity: 0;
-      pointer-events:none;
-      white-space:nowrap;
+.word{
+  position:relative;
+  display:inline-block;
+}
 
-      /* translucent collision feel */
-      color: rgba(0,0,0,.0);
-      -webkit-text-stroke: 1px rgba(0,0,0,.34);
-      text-shadow: 0 14px 40px rgba(0,0,0,.10);
-      filter: blur(.15px);
-      mix-blend-mode: multiply;
+canvas{
+  position:absolute;
+  pointer-events:none;
+}
 
-      transition:
-        opacity 900ms ease,
-        transform 900ms ease,
-        filter 900ms ease;
-    }
-
-    /* when infected */
-    .t.infected .overlay{
-      opacity: 1;
-      transform: translate(-50%,-52%) scale(1.05);
-      filter: blur(0px);
-    }
-
-    /* stronger later */
-    .t.collision .overlay{
-      opacity: .92;
-      transform: translate(-50%,-52%) scale(1.18) rotate(var(--rot, -1deg));
-      -webkit-text-stroke: 1.2px rgba(0,0,0,.42);
-      filter: blur(0px);
-    }
-
-    /* optional subtle “pressure” on original */
-    .t.infected{
-      text-shadow: 0 0 0 rgba(0,0,0,0);
-    }
-    .t.collision{
-      text-shadow: 0 0 0 rgba(0,0,0,0);
-    }
-
-    /* HUD */
-    #hud{
-      position: fixed;
-      left: 14px;
-      bottom: 14px;
-      z-index: 10;
-      font-family: var(--sans);
-      font-size: 12px;
-      opacity: .6;
-      user-select:none;
-      pointer-events: none;
-      background: rgba(255,255,255,.75);
-      border: 1px solid rgba(0,0,0,.08);
-      padding: 6px 10px;
-      border-radius: 999px;
-      backdrop-filter: blur(4px);
-    }
-    #restart{
-      position: fixed;
-      right: 14px;
-      bottom: 14px;
-      z-index: 10;
-      font-family: var(--sans);
-      font-size: 12px;
-      border: 1px solid rgba(0,0,0,.12);
-      background: rgba(255,255,255,.78);
-      padding: 8px 10px;
-      border-radius: 12px;
-      cursor: pointer;
-      box-shadow: 0 14px 35px rgba(0,0,0,.10);
-      backdrop-filter: blur(4px);
-    }
-    #restart:active{ transform: translateY(1px); }
-  </style>
+#lens{
+  position:absolute;
+  width:280px;
+  height:280px;
+  border-radius:50%;
+  border:2px solid rgba(0,0,0,.2);
+  backdrop-filter:blur(3px);
+  pointer-events:none;
+  mix-blend-mode:normal;
+}
+</style>
 </head>
 <body>
-  <div id="wrap">
-    <div id="sentence" aria-label="Sentence"></div>
-  </div>
-  <div id="hud">Appropriation: OFF → ON → COLLISION</div>
-  <button id="restart" type="button">Restart</button>
 
-  <script>
-    const SENTENCE = "Then they discovered the beauty of merchandise and started making it relentlessly.";
+<div id="stage">
+  <div id="sentence"></div>
+  <div id="lens"></div>
+</div>
 
-    // infection mapping (word -> overlay)
-    const MAP = new Map([
-      ["beauty", "VALUE"],
-      ["merchandise", "PRODUCT"],
-      ["making", "OPTIMIZING"],
-    ]);
+<script>
+const TEXT = "Then they discovered the beauty of merchandise and started making it relentlessly.";
 
-    const sentenceEl = document.getElementById("sentence");
-    const hud = document.getElementById("hud");
-    const restartBtn = document.getElementById("restart");
+const MAP = {
+  beauty: "VALUATION",
+  merchandise: "COMMODITY",
+  making: "OPTIMIZING"
+};
 
-    let timers = [];
+const stage = document.getElementById("stage");
+const sentenceEl = document.getElementById("sentence");
+const lens = document.getElementById("lens");
 
-    function clearTimers(){
-      timers.forEach(t => clearTimeout(t));
-      timers = [];
-    }
+let lensX = window.innerWidth/2;
+let lensY = window.innerHeight/2;
+let activeWord = null;
 
-    function tokenize(text){
-      // Keep punctuation and spaces
-      return text.split(/(\s+|[,.!?:;])/g).filter(s => s !== "");
-    }
+// --- Split sentence into words ---
+function renderSentence(){
+  const words = TEXT.split(" ");
+  words.forEach(w=>{
+    const clean = w.replace(/[.,]/g,"").toLowerCase();
+    const span = document.createElement("span");
+    span.className="word";
+    span.textContent = w + " ";
+    span.dataset.word = clean;
+    sentenceEl.appendChild(span);
+  });
+}
+renderSentence();
 
-    function render(){
-      sentenceEl.textContent = "";
-      const frag = document.createDocumentFragment();
-      const parts = tokenize(SENTENCE);
+// --- Create viral canvas over word ---
+function infect(wordEl, replacement){
 
-      for (const p of parts){
-        const lower = p.toLowerCase();
+  if(wordEl.querySelector("canvas")) return;
 
-        if (MAP.has(lower)){
-          const span = document.createElement("span");
-          span.className = "t";
-          span.dataset.word = lower;
-          span.textContent = p;
+  const rect = wordEl.getBoundingClientRect();
+  const canvas = document.createElement("canvas");
+  canvas.width = rect.width*1.6;
+  canvas.height = rect.height*1.8;
+  canvas.style.left = "-20%";
+  canvas.style.top = "-40%";
 
-          const overlay = document.createElement("span");
-          overlay.className = "overlay";
-          overlay.textContent = MAP.get(lower);
+  wordEl.style.color="transparent";
+  wordEl.appendChild(canvas);
 
-          // random small rotation per token for “collision”
-          overlay.style.setProperty("--rot", ((Math.random()*2-1)*3.2).toFixed(2) + "deg");
+  const ctx = canvas.getContext("2d");
 
-          // size overlay relative to original: slightly larger
-          // we’ll set via JS after it’s in DOM (measure)
-          span.appendChild(overlay);
-          frag.appendChild(span);
-        } else {
-          frag.appendChild(document.createTextNode(p));
-        }
-      }
+  const particles = [];
+  const letters = replacement.split("");
 
-      sentenceEl.appendChild(frag);
+  letters.forEach((letter,i)=>{
+    const baseX = 20 + i* (canvas.width/(letters.length+1));
+    const baseY = canvas.height/2;
 
-      // after render: scale overlay to match word width (so it “sits” on the original)
-      requestAnimationFrame(() => {
-        const tokens = sentenceEl.querySelectorAll(".t");
-        tokens.forEach(t => {
-          const word = t.dataset.word;
-          const overlay = t.querySelector(".overlay");
-          const ow = overlay.getBoundingClientRect().width || 1;
-          const ww = t.getBoundingClientRect().width || 1;
-
-          // fit overlay roughly to word width, but keep it slightly “too big”
-          const fit = ww / ow;
-          const extra = word === "merchandise" ? 1.08 : 1.04;
-          overlay.style.transform = `translate(-50%,-52%) scale(${(fit*extra).toFixed(3)})`;
-        });
+    for(let j=0;j<35;j++){
+      particles.push({
+        x: baseX + (Math.random()-0.5)*40,
+        y: baseY + (Math.random()-0.5)*40,
+        size: Math.random()*4+2,
+        vx: (Math.random()-0.5)*1.5,
+        vy: (Math.random()-0.5)*1.5,
+        targetX: baseX,
+        targetY: baseY
       });
     }
+  });
 
-    function run(){
-      clearTimers();
-      render();
+  function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 
-      const targets = {
-        beauty: sentenceEl.querySelector('.t[data-word="beauty"]'),
-        merchandise: sentenceEl.querySelector('.t[data-word="merchandise"]'),
-        making: sentenceEl.querySelector('.t[data-word="making"]'),
-      };
+    particles.forEach(p=>{
+      p.x += (p.targetX - p.x)*0.02 + p.vx;
+      p.y += (p.targetY - p.y)*0.02 + p.vy;
 
-      hud.textContent = "Appropriation: OFF";
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
+      ctx.fillStyle="#222";
+      ctx.fill();
+    });
 
-      // Phase A: stillness
-      timers.push(setTimeout(() => {
-        hud.textContent = "Appropriation: ON (overlay begins)";
-        targets.merchandise?.classList.add("infected");
-      }, 1100));
+    requestAnimationFrame(draw);
+  }
 
-      // bring in beauty
-      timers.push(setTimeout(() => {
-        targets.beauty?.classList.add("infected");
-      }, 2000));
+  draw();
+}
 
-      // bring in making
-      timers.push(setTimeout(() => {
-        targets.making?.classList.add("infected");
-      }, 2900));
+// --- Lens movement ---
+document.addEventListener("mousemove",(e)=>{
+  lensX=e.clientX;
+  lensY=e.clientY;
+  lens.style.left = lensX-140+"px";
+  lens.style.top = lensY-140+"px";
 
-      // Phase B: collision intensifies (bigger, more opaque, slight wobble)
-      timers.push(setTimeout(() => {
-        hud.textContent = "Appropriation: COLLISION (two languages fight)";
-        Object.values(targets).forEach(t => t?.classList.add("collision"));
-      }, 4200));
+  checkInfection();
+});
 
-      // Optional: pulse (a bit of rhythmic pressure)
-      timers.push(setTimeout(() => {
-        const pulse = () => {
-          Object.values(targets).forEach(t => {
-            if (!t) return;
-            t.classList.toggle("collision");
-            setTimeout(() => t.classList.toggle("collision"), 520);
-          });
-        };
-        pulse();
-        const id = setInterval(pulse, 4200);
-        timers.push(id);
-      }, 5200));
+function checkInfection(){
+  const words = document.querySelectorAll(".word");
+  words.forEach(w=>{
+    const rect = w.getBoundingClientRect();
+    const centerX = rect.left + rect.width/2;
+    const centerY = rect.top + rect.height/2;
+
+    const dist = Math.hypot(centerX - lensX, centerY - lensY);
+
+    if(dist < 140){
+      const key = w.dataset.word;
+      if(MAP[key]){
+        infect(w, MAP[key]);
+      }
     }
+  });
+}
 
-    restartBtn.addEventListener("click", () => run());
-    run();
-  </script>
+</script>
 </body>
 </html>
+
