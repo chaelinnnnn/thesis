@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation Lens — PNG Overlay</title>
+  <title>Appropriation Lens — PNG Overlay (Final)</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -13,7 +13,7 @@
     }
     body{ margin:0; background:var(--bg); color:var(--ink); }
 
-    .wrap{ width:min(920px, 92vw); margin:0 auto; padding:44px 16px 300px; }
+    .wrap{ width:min(920px, 92vw); margin:0 auto; padding:44px 16px 220px; }
     header{
       position: sticky; top: 0; z-index: 3;
       background: rgba(255,255,255,.92);
@@ -41,21 +41,21 @@
     #pngLayer{
       position: fixed;
       inset: 0;
-      z-index: 9996;        /* 본문 위, 렌즈 아래 느낌 */
+      z-index: 9996;        /* 본문 위, 렌즈 아래 */
       pointer-events: none;
     }
     .pngWord{
       position: absolute;
       transform-origin: left bottom;
-      image-rendering: auto;
       opacity: 1;
       filter: drop-shadow(0 8px 18px rgba(0,0,0,.18));
-      will-change: transform, left, top;
+      will-change: transform, left, top, width, height;
+      user-select: none;
     }
 
     /* 토글 스와치 */
     #swatch{
-      position: fixed; right: 18px; bottom: 44px;
+      position: fixed; right: 18px; bottom: 18px;
       width: 52px; height: 52px;
       border-radius: 18px;
       border: 1px solid rgba(0,0,0,.14);
@@ -77,7 +77,7 @@
     #lens{
       position: fixed;
       left: 50%; top: 58%;
-      width: 420px; height: 420px;
+      width: 460px; height: 460px; /* ✅ 렌즈 조금 키움 */
       transform: translate(-50%,-50%);
       border-radius: 999px;
       background: rgba(255,255,255,.04);
@@ -89,6 +89,7 @@
       overflow:hidden;
     }
     body.lensOn #lens{ opacity:1; pointer-events:auto; }
+
     #lens::before{
       content:""; position:absolute; inset:-40px;
       background:
@@ -104,7 +105,7 @@
     }
     #handle{
       position:absolute; left:50%; top:50%;
-      transform: translate(150px, 150px);
+      transform: translate(170px, 170px);
       width:40px; height:40px; border-radius:999px;
       background: rgba(255,255,255,.78);
       border: 1px solid rgba(0,0,0,.10);
@@ -118,22 +119,8 @@
       box-shadow: 0 0 0 6px rgba(0,0,0,.05);
     }
 
-    /* 하단 trace */
-    #traceBar{
-      position: fixed; left:0; bottom:0;
-      width:100%; height:22px;
-      background: rgba(255,255,255,.90);
-      border-top: 1px solid rgba(0,0,0,.06);
-      display:flex; align-items:center; gap:2px;
-      padding:0 6px;
-      z-index: 9997;
-      pointer-events:none;
-      overflow:hidden;
-    }
-    .trace{ flex:1; height:6px; border-radius:3px; opacity:.18; filter:saturate(115%); }
-
     #hint{
-      position: fixed; left:18px; bottom:44px;
+      position: fixed; left:18px; bottom:18px;
       font-family: var(--sans);
       font-size: 12px;
       opacity:.58;
@@ -151,7 +138,7 @@
   <div class="wrap">
     <header>
       <h1>전유된 대화: 내 욕망으로 번역되는 타자의 목소리</h1>
-      <p>렌즈 안에 들어온 키워드 단어는 텍스트 대신 PNG(바이러스 글자)로 대체됩니다.</p>
+      <p>우측 하단 스와치를 눌러 렌즈 ON/OFF. 렌즈 안의 특정 단어는 텍스트 대신 PNG(바이러스 글자)로 대체됩니다.</p>
     </header>
     <div id="content"></div>
   </div>
@@ -167,9 +154,9 @@
   </div>
 
   <div id="hint">Lens: OFF</div>
-  <div id="traceBar" aria-hidden="true"></div>
 
   <script>
+    // ✅ 원문(필요하면 더 붙여도 됨)
     const TEXT = `
 They were the ones who put the tall stones of Omama’s house in place and created the first merchandise, paper skins, and medicine.
 
@@ -182,25 +169,27 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
 This is how little by little the forest disappeared from their land.
 `.trim();
 
-    // ✅ 단어 -> PNG 매핑 (네가 만든 파일명에 맞춰 바꾸면 됨)
+    // ✅ 중요: 네 레포 구조(스크린샷) 기준으로 PNG가 index.html과 같은 폴더(루트)에 있음
+    // 그래서 images/asset.png 가 아니라 ./asset.png 로 써야 로딩됨.
     const PNG_MAP = [
-      { re: /^forest$/i,     png: "images/asset.png",      color:"#2a7fff" },
-      { re: /^xapiri$/i,     png: "images/intangible.png", color:"#00b894" },
-      { re: /^bee(s)?$/i,    png: "images/product.png",    color:"#ffd400" },
-      { re: /^honey$/i,      png: "images/revenue.png",    color:"#ff8a00" },
-      { re: /^flower(s)?$/i, png: "images/input.png",      color:"#38d9a9" },
-      { re: /^land$/i,       png: "images/property.png",   color:"#845ef7" },
-      { re: /^knowledge$/i,  png: "images/patent.png",     color:"#ff3dce" },
-      { re: /^law$/i,        png: "images/policy.png",     color:"#2a7fff" },
-      { re: /^memory$/i,     png: "images/database.png",   color:"#00b894" },
-      { re: /^medicine$/i,   png: "images/product2.png",   color:"#ff4d4d" },
+      { re: /^forest$/i,     png: "./asset.png" },
+      { re: /^xapiri$/i,     png: "./intangible.png" },
+
+      // 나중에 파일 추가하면 아래처럼 이어서:
+      // { re: /^bee(s)?$/i,    png: "./product.png" },
+      // { re: /^honey$/i,      png: "./revenue.png" },
+      // { re: /^flower(s)?$/i, png: "./input.png" },
+      // { re: /^land$/i,       png: "./property.png" },
+      // { re: /^knowledge$/i,  png: "./patent.png" },
+      // { re: /^law$/i,        png: "./policy.png" },
+      // { re: /^memory$/i,     png: "./database.png" },
+      // { re: /^medicine$/i,   png: "./product2.png" },
     ];
 
     const content = document.getElementById("content");
     const lens = document.getElementById("lens");
     const swatch = document.getElementById("swatch");
     const hint = document.getElementById("hint");
-    const traceBar = document.getElementById("traceBar");
     const pngLayer = document.getElementById("pngLayer");
 
     let lensOn = false;
@@ -229,17 +218,6 @@ This is how little by little the forest disappeared from their land.
         if (entry.re.test(word)) return entry;
       }
       return null;
-    }
-
-    function addTrace(color){
-      const t = document.createElement("div");
-      t.className = "trace";
-      t.style.background = color;
-      traceBar.appendChild(t);
-      const MAX = 90;
-      while (traceBar.children.length > MAX){
-        traceBar.removeChild(traceBar.firstChild);
-      }
     }
 
     function clearPngLayer(){
@@ -271,32 +249,27 @@ This is how little by little the forest disappeared from their land.
         if (inside){
           const entry = lookupPng(orig);
           if (entry){
-            // 원 단어 숨김(공간 유지)
             sp.classList.add("hiddenInk");
 
-            // PNG 이미지 생성(단어 위치에 맞춰 배치)
             const img = document.createElement("img");
             img.className = "pngWord";
             img.src = entry.png;
             img.alt = "";
 
-            // 단어 박스에 맞춰 스케일링
-            // PNG가 “원래 단어보다 살짝 크게” 보이게 (바이러스 느낌)
-            const scale = 1.25;
+            // ✅ 디버그: 로딩 실패 시 콘솔에 표시(경로 문제 바로 잡힘)
+            img.onerror = () => console.warn("PNG load failed:", entry.png);
 
-            img.style.left = (r.left) + "px";
-            img.style.top  = (r.top) + "px";
+            // 단어 박스에 맞춰 스케일링(바이러스 느낌으로 약간 크게)
+            const scale = 1.35;
+            img.style.left = r.left + "px";
+            img.style.top  = r.top + "px";
             img.style.width  = (r.width * scale) + "px";
             img.style.height = (r.height * scale) + "px";
-            img.style.transform = `translate(${-r.width*(scale-1)*0.15}px, ${-r.height*(scale-1)*0.35}px)`;
+
+            // 약간 위/왼쪽으로 당겨서 “덮어씌우는” 느낌
+            img.style.transform = `translate(${-r.width*(scale-1)*0.18}px, ${-r.height*(scale-1)*0.42}px)`;
 
             pngLayer.appendChild(img);
-
-            // trace는 최초만
-            if (sp.dataset.traced !== "1"){
-              addTrace(entry.color);
-              sp.dataset.traced = "1";
-            }
           } else {
             sp.classList.remove("hiddenInk");
           }
