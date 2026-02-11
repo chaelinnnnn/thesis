@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation Lens — Virus Glyphs</title>
+  <title>Appropriation Lens — PNG Overlay</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -24,7 +24,6 @@
     header p{ margin:6px 0 0; font-size:13px; opacity:.72; }
 
     #content{
-      position: relative;
       margin-top: 16px;
       font-family: var(--mono);
       font-size: 16px;
@@ -33,14 +32,25 @@
       word-break: keep-all;
       letter-spacing: .01em;
     }
-
-    /* 단어 토큰(원문은 유지) */
     .w{ display:inline; position:relative; padding:0 2px; border-radius:10px; }
 
-    /* 렌즈 안에서 “치환됨” 상태일 때, 원래 글자는 숨김(공간은 유지) */
-    .w.hiddenInk{
-      color: transparent;
-      text-shadow: none;
+    /* PNG가 올라올 때 원래 단어는 투명 처리(공간은 유지) */
+    .w.hiddenInk{ color: transparent; text-shadow:none; }
+
+    /* ✅ PNG 오버레이 레이어 */
+    #pngLayer{
+      position: fixed;
+      inset: 0;
+      z-index: 9996;        /* 본문 위, 렌즈 아래 느낌 */
+      pointer-events: none;
+    }
+    .pngWord{
+      position: absolute;
+      transform-origin: left bottom;
+      image-rendering: auto;
+      opacity: 1;
+      filter: drop-shadow(0 8px 18px rgba(0,0,0,.18));
+      will-change: transform, left, top;
     }
 
     /* 토글 스와치 */
@@ -61,11 +71,7 @@
     }
 
     /* 렌즈 */
-    #lensWrap{
-      position: fixed; inset:0; z-index:9998;
-      opacity:0; transition:opacity .16s ease;
-      pointer-events:none;
-    }
+    #lensWrap{ position:fixed; inset:0; z-index:9998; opacity:0; transition:opacity .16s ease; pointer-events:none; }
     body.lensOn #lensWrap{ opacity:1; }
 
     #lens{
@@ -83,31 +89,23 @@
       overflow:hidden;
     }
     body.lensOn #lens{ opacity:1; pointer-events:auto; }
-
     #lens::before{
-      content:"";
-      position:absolute; inset:-40px;
+      content:""; position:absolute; inset:-40px;
       background:
         radial-gradient(circle at 30% 25%, rgba(255,255,255,.55), transparent 45%),
         radial-gradient(circle at 70% 70%, rgba(255,255,255,.22), transparent 55%),
         linear-gradient(135deg, rgba(255,255,255,.18), transparent 60%);
-      opacity:.35;
-      mix-blend-mode: screen;
-      pointer-events:none;
+      opacity:.35; mix-blend-mode: screen; pointer-events:none;
     }
     #lens::after{
-      content:"";
-      position:absolute; inset:10px;
-      border-radius: 999px;
+      content:""; position:absolute; inset:10px; border-radius:999px;
       box-shadow: 0 0 0 1px rgba(0,0,0,.08) inset, 0 -10px 25px rgba(255,255,255,.25) inset;
       pointer-events:none;
     }
-
     #handle{
       position:absolute; left:50%; top:50%;
       transform: translate(150px, 150px);
-      width:40px; height:40px;
-      border-radius:999px;
+      width:40px; height:40px; border-radius:999px;
       background: rgba(255,255,255,.78);
       border: 1px solid rgba(0,0,0,.10);
       box-shadow: 0 10px 28px rgba(0,0,0,.14);
@@ -115,23 +113,12 @@
       pointer-events:none; opacity:.9;
     }
     #handle::before{
-      content:"";
-      width:12px; height:12px;
-      border-radius:999px;
+      content:""; width:12px; height:12px; border-radius:999px;
       background: rgba(0,0,0,.82);
       box-shadow: 0 0 0 6px rgba(0,0,0,.05);
     }
 
-    /* ✅ 바이러스 글자 오버레이(페이지 전체) */
-    #virusOverlay{
-      position: fixed;
-      inset: 0;
-      z-index: 9996; /* 렌즈 아래, 본문 위처럼 보이게 */
-      pointer-events: none;
-      opacity: 1;
-    }
-
-    /* 하단 trace bar */
+    /* 하단 trace */
     #traceBar{
       position: fixed; left:0; bottom:0;
       width:100%; height:22px;
@@ -143,10 +130,7 @@
       pointer-events:none;
       overflow:hidden;
     }
-    .trace{
-      flex:1; height:6px; border-radius:3px;
-      opacity:.18; filter:saturate(115%);
-    }
+    .trace{ flex:1; height:6px; border-radius:3px; opacity:.18; filter:saturate(115%); }
 
     #hint{
       position: fixed; left:18px; bottom:44px;
@@ -164,43 +148,16 @@
   </style>
 </head>
 <body>
-
-  <!-- ✅ SVG 필터(글자 자체를 덩어리/바이러스화) -->
-  <svg width="0" height="0" style="position:absolute">
-    <!-- 1) 울렁임 -->
-    <filter id="warp">
-      <feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="2" seed="8" result="n">
-        <animate attributeName="baseFrequency" dur="6s" values="0.014;0.020;0.014" repeatCount="indefinite"/>
-      </feTurbulence>
-      <feDisplacementMap in="SourceGraphic" in2="n" scale="18" xChannelSelector="R" yChannelSelector="G"/>
-    </filter>
-
-    <!-- 2) 덩어리/바이러스 질감(거친 노이즈 + 경계) -->
-    <filter id="virusGlyph">
-      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="3" result="g"/>
-      <feColorMatrix in="g" type="matrix"
-        values="
-          1 0 0 0 0
-          0 1 0 0 0
-          0 0 1 0 0
-          0 0 0 .55 0" result="grain"/>
-      <feComposite in="SourceGraphic" in2="grain" operator="arithmetic" k1="0" k2="1" k3="0.35" k4="0" result="mix"/>
-      <feGaussianBlur in="mix" stdDeviation="0.25" result="soft"/>
-      <feDisplacementMap in="soft" in2="g" scale="10" xChannelSelector="R" yChannelSelector="G" result="warped"/>
-      <feComposite in="warped" in2="SourceGraphic" operator="over"/>
-    </filter>
-  </svg>
-
   <div class="wrap">
     <header>
       <h1>전유된 대화: 내 욕망으로 번역되는 타자의 목소리</h1>
-      <p>스와치로 렌즈 ON/OFF. 렌즈 안에서만 단어가 “바이러스 글자(형태 자체 변형)”로 치환됩니다.</p>
+      <p>렌즈 안에 들어온 키워드 단어는 텍스트 대신 PNG(바이러스 글자)로 대체됩니다.</p>
     </header>
     <div id="content"></div>
   </div>
 
-  <!-- ✅ 오버레이: 바이러스 글자를 SVG로 다시 그려서 “형태 자체”를 바꿈 -->
-  <svg id="virusOverlay"></svg>
+  <!-- ✅ PNG 오버레이 레이어 -->
+  <div id="pngLayer" aria-hidden="true"></div>
 
   <div id="swatch" aria-label="Toggle lens"><div class="inner"></div></div>
   <div id="lensWrap" aria-hidden="true">
@@ -225,18 +182,18 @@ Bees are also xapiri; this is why their images spoke to me this way during my sl
 This is how little by little the forest disappeared from their land.
 `.trim();
 
-    // ✅ 10개 키워드 + 다채로운 컬러
-    const NOUN_MAP = [
-      { re: /^forest$/i,     to: "Asset",      color: "#2a7fff" },
-      { re: /^xapiri$/i,     to: "Intangible", color: "#00b894" },
-      { re: /^bee(s)?$/i,    to: "Product",    color: "#ffd400" },
-      { re: /^honey$/i,      to: "Revenue",    color: "#ff8a00" },
-      { re: /^flower(s)?$/i, to: "Input",      color: "#38d9a9" },
-      { re: /^land$/i,       to: "Property",   color: "#845ef7" },
-      { re: /^knowledge$/i,  to: "Patent",     color: "#ff3dce" },
-      { re: /^law$/i,        to: "Policy",     color: "#2a7fff" },
-      { re: /^memory$/i,     to: "Database",   color: "#00b894" },
-      { re: /^medicine$/i,   to: "Product",    color: "#ff4d4d" },
+    // ✅ 단어 -> PNG 매핑 (네가 만든 파일명에 맞춰 바꾸면 됨)
+    const PNG_MAP = [
+      { re: /^forest$/i,     png: "images/asset.png",      color:"#2a7fff" },
+      { re: /^xapiri$/i,     png: "images/intangible.png", color:"#00b894" },
+      { re: /^bee(s)?$/i,    png: "images/product.png",    color:"#ffd400" },
+      { re: /^honey$/i,      png: "images/revenue.png",    color:"#ff8a00" },
+      { re: /^flower(s)?$/i, png: "images/input.png",      color:"#38d9a9" },
+      { re: /^land$/i,       png: "images/property.png",   color:"#845ef7" },
+      { re: /^knowledge$/i,  png: "images/patent.png",     color:"#ff3dce" },
+      { re: /^law$/i,        png: "images/policy.png",     color:"#2a7fff" },
+      { re: /^memory$/i,     png: "images/database.png",   color:"#00b894" },
+      { re: /^medicine$/i,   png: "images/product2.png",   color:"#ff4d4d" },
     ];
 
     const content = document.getElementById("content");
@@ -244,17 +201,9 @@ This is how little by little the forest disappeared from their land.
     const swatch = document.getElementById("swatch");
     const hint = document.getElementById("hint");
     const traceBar = document.getElementById("traceBar");
-    const overlay = document.getElementById("virusOverlay");
+    const pngLayer = document.getElementById("pngLayer");
 
     let lensOn = false;
-
-    // overlay 크기 세팅
-    function sizeOverlay(){
-      overlay.setAttribute("width", window.innerWidth);
-      overlay.setAttribute("height", window.innerHeight);
-      overlay.setAttribute("viewBox", `0 0 ${window.innerWidth} ${window.innerHeight}`);
-    }
-    sizeOverlay();
 
     function renderTokenized(text){
       const parts = text.split(/([A-Za-z]+(?:'[A-Za-z]+)?)/g);
@@ -275,8 +224,8 @@ This is how little by little the forest disappeared from their land.
       content.appendChild(frag);
     }
 
-    function lookupWord(word){
-      for (const entry of NOUN_MAP){
+    function lookupPng(word){
+      for (const entry of PNG_MAP){
         if (entry.re.test(word)) return entry;
       }
       return null;
@@ -293,78 +242,23 @@ This is how little by little the forest disappeared from their land.
       }
     }
 
+    function clearPngLayer(){
+      pngLayer.innerHTML = "";
+    }
+
     renderTokenized(TEXT);
     const wordSpans = () => Array.from(content.querySelectorAll(".w"));
 
-    function clearOverlay(){
-      overlay.innerHTML = "";
-    }
-
-    // SVG에 “바이러스 글자” 그리기
-    function drawVirusWord({x, y, text, fontSize, color}){
-      const ns = "http://www.w3.org/2000/svg";
-
-      // 그룹
-      const g = document.createElementNS(ns, "g");
-      g.setAttribute("transform", `translate(${x}, ${y})`);
-
-      // (1) 바깥 검은 외곽선(두껍게)
-      const outline = document.createElementNS(ns, "text");
-      outline.textContent = text;
-      outline.setAttribute("x", "0");
-      outline.setAttribute("y", "0");
-      outline.setAttribute("font-family", getComputedStyle(content).fontFamily);
-      outline.setAttribute("font-size", fontSize);
-      outline.setAttribute("font-weight", "900");
-      outline.setAttribute("fill", "none");
-      outline.setAttribute("stroke", "rgba(0,0,0,.95)");
-      outline.setAttribute("stroke-width", "6");
-      outline.setAttribute("stroke-linejoin", "round");
-      outline.setAttribute("paint-order", "stroke");
-      outline.setAttribute("filter", "url(#warp)");
-
-      // (2) 컬러 본체(덩어리/질감)
-      const fill = document.createElementNS(ns, "text");
-      fill.textContent = text;
-      fill.setAttribute("x", "0");
-      fill.setAttribute("y", "0");
-      fill.setAttribute("font-family", getComputedStyle(content).fontFamily);
-      fill.setAttribute("font-size", fontSize);
-      fill.setAttribute("font-weight", "900");
-      fill.setAttribute("fill", color);
-      fill.setAttribute("filter", "url(#virusGlyph)");
-
-      // (3) 하이라이트(살짝 밝은 톤)
-      const hi = document.createElementNS(ns, "text");
-      hi.textContent = text;
-      hi.setAttribute("x", "0");
-      hi.setAttribute("y", "0");
-      hi.setAttribute("font-family", getComputedStyle(content).fontFamily);
-      hi.setAttribute("font-size", fontSize);
-      hi.setAttribute("font-weight", "900");
-      hi.setAttribute("fill", "rgba(255,255,255,.55)");
-      hi.setAttribute("filter", "url(#warp)");
-      hi.setAttribute("opacity", ".18");
-
-      g.appendChild(outline);
-      g.appendChild(fill);
-      g.appendChild(hi);
-
-      overlay.appendChild(g);
-    }
-
-    // 렌즈 안 단어만 치환 + 오버레이로 바이러스 글자 그리기
+    // ✅ 렌즈 안 단어만 PNG로 대체
     function updateLensEffect(){
       if (!lensOn) return;
 
-      clearOverlay();
+      clearPngLayer();
 
       const lr = lens.getBoundingClientRect();
       const cx = lr.left + lr.width / 2;
       const cy = lr.top + lr.height / 2;
       const radius = lr.width / 2;
-
-      const baseFontSize = parseFloat(getComputedStyle(content).fontSize);
 
       for (const sp of wordSpans()){
         const r = sp.getBoundingClientRect();
@@ -375,22 +269,30 @@ This is how little by little the forest disappeared from their land.
         const orig = sp.dataset.orig || "";
 
         if (inside){
-          const entry = lookupWord(orig);
+          const entry = lookupPng(orig);
           if (entry){
-            // 원 글자는 숨기고(공간 유지)
+            // 원 단어 숨김(공간 유지)
             sp.classList.add("hiddenInk");
 
-            // 화면 좌표에 바이러스 글자 그리기
-            // SVG text는 baseline 기준이라 y에 height*0.78 정도 더해 맞춤
-            drawVirusWord({
-              x: r.left,
-              y: r.top + r.height * 0.78,
-              text: entry.to,
-              fontSize: baseFontSize,
-              color: entry.color
-            });
+            // PNG 이미지 생성(단어 위치에 맞춰 배치)
+            const img = document.createElement("img");
+            img.className = "pngWord";
+            img.src = entry.png;
+            img.alt = "";
 
-            // trace는 최초 치환 순간에만 쌓이게(데이터 플래그)
+            // 단어 박스에 맞춰 스케일링
+            // PNG가 “원래 단어보다 살짝 크게” 보이게 (바이러스 느낌)
+            const scale = 1.25;
+
+            img.style.left = (r.left) + "px";
+            img.style.top  = (r.top) + "px";
+            img.style.width  = (r.width * scale) + "px";
+            img.style.height = (r.height * scale) + "px";
+            img.style.transform = `translate(${-r.width*(scale-1)*0.15}px, ${-r.height*(scale-1)*0.35}px)`;
+
+            pngLayer.appendChild(img);
+
+            // trace는 최초만
             if (sp.dataset.traced !== "1"){
               addTrace(entry.color);
               sp.dataset.traced = "1";
@@ -409,7 +311,7 @@ This is how little by little the forest disappeared from their land.
       document.body.classList.toggle("lensOn", on);
       hint.textContent = on ? "Lens: ON (drag)" : "Lens: OFF";
 
-      clearOverlay();
+      clearPngLayer();
 
       if (!on){
         for (const sp of wordSpans()){
@@ -422,7 +324,7 @@ This is how little by little the forest disappeared from their land.
 
     swatch.addEventListener("click", () => setLens(!lensOn));
 
-    // 드래그
+    // 렌즈 드래그
     let dragging = false;
     let offsetX = 0, offsetY = 0;
 
@@ -457,7 +359,7 @@ This is how little by little the forest disappeared from their land.
     });
 
     window.addEventListener("scroll", () => updateLensEffect(), { passive:true });
-    window.addEventListener("resize", () => { sizeOverlay(); updateLensEffect(); });
+    window.addEventListener("resize", () => updateLensEffect());
   </script>
 </body>
 </html>
