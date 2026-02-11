@@ -9,8 +9,8 @@
       --bg:#ffffff;
       --ink:#111;
       --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      --lensSize: 200px; /* ✅ size increased to 200 */
-      --fadeSeconds: 6.5; /* faster to black */
+      --lensSize: 200px;       /* ✅ lens size */
+      --fadeSeconds: 6.5;      /* faster to black */
     }
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
@@ -50,7 +50,7 @@
       z-index:10; pointer-events:auto; touch-action:none;
     }
 
-    /* ✅ lens: remove stroke ring 느낌, add real glass thickness */
+    /* ✅ Real glass look: no stroke ring, more thickness */
     #lens .glass{
       position:absolute;
       inset:0;
@@ -67,13 +67,12 @@
       );
 
       box-shadow:
-        0 30px 80px rgba(0,0,0,.25),            /* outer drop shadow */
-        inset 0 20px 35px rgba(255,255,255,.6), /* top highlight */
-        inset 0 -25px 40px rgba(0,0,0,.18),     /* bottom depth */
-        inset 0 0 40px rgba(0,0,0,.12);         /* inner curvature */
+        0 30px 80px rgba(0,0,0,.25),
+        inset 0 20px 35px rgba(255,255,255,.6),
+        inset 0 -25px 40px rgba(0,0,0,.18),
+        inset 0 0 40px rgba(0,0,0,.12);
     }
 
-    /* ✅ keep subtle highlight, no stroke ring */
     #lens .glass::before{
       content:""; position:absolute; inset:-50px;
       background:
@@ -85,8 +84,6 @@
       pointer-events:none;
       filter: blur(0.2px);
     }
-
-    /* ✅ removed: .glass::after (inner rings / strokes) */
 
     .hint{
       position:fixed; left:16px; bottom:16px; z-index:20;
@@ -107,7 +104,7 @@
 
   <div id="lens">
     <div class="glass"></div>
-    <!-- ✅ removed: lensHandle (weird circle) -->
+    <!-- ✅ removed lens handle / weird circle -->
   </div>
 
   <div class="hint">Drag lens over: beauty / merchandise / making</div>
@@ -195,27 +192,26 @@
     return mask.img[idx+3];
   }
 
-  // ✅ Text sampling method - samples pixels from rendered text
+  // ✅ particles from text pixels (bigger text)
   function precomputeParticles_POISSON(text, w, h, seedKey){
     const rng = makeRng(hashStr(seedKey));
 
-    const pad = Math.round(Math.max(64, Math.min(140, Math.min(w,h) * 0.28)));
+    /* ✅ pad reduced: more room for big letters */
+    const pad = Math.round(Math.max(18, Math.min(60, Math.min(w,h) * 0.12)));
     const iw = w - pad*2;
     const ih = h - pad*2;
 
-    const fontSize = Math.max(34, Math.min(170, Math.floor(ih*0.82)));
+    /* ✅ allow font to scale up more aggressively */
+    const fontSize = Math.max(44, Math.min(260, Math.floor(ih * 0.92)));
     const font = `900 ${fontSize}px ${getComputedStyle(document.body).getPropertyValue("--sans") || "system-ui"}`;
     const mask = buildMask(text, iw, ih, font);
 
-    // ✅ Sample particles directly from text pixels
     const pts = [];
-    const samplingDensity = 4; // sample every N pixels
+    const samplingDensity = 4;
 
     for(let y = 0; y < ih; y += samplingDensity){
       for(let x = 0; x < iw; x += samplingDensity){
         const a = alphaAt(mask, x, y, iw, ih);
-
-        // Only place particle if pixel is part of text
         if(a > 128){
           const jitterX = (rng() - 0.5) * samplingDensity * 0.6;
           const jitterY = (rng() - 0.5) * samplingDensity * 0.6;
@@ -223,7 +219,8 @@
           pts.push({
             x: x + pad + jitterX,
             y: y + pad + jitterY,
-            r0: 1.2 + rng() * 0.8,
+            /* ✅ bigger dots: makes “weight” match original */
+            r0: 1.8 + rng() * 1.0,
             ph: rng()*Math.PI*2,
             pulse: 0.005 + rng()*0.010,
             blob: 1
@@ -231,11 +228,9 @@
         }
       }
     }
-
     return pts;
   }
 
-  // Simple circle rendering for clear text
   function render(ctx, pts, t, color){
     ctx.fillStyle = color;
     const tt = t*0.001;
@@ -339,8 +334,9 @@
 
       const scale = 1.08 + 0.08*obj.prog;
 
-      const w = Math.max(320, r.width  * (scale * 1.85));
-      const h = Math.max(180, r.height * (scale * 1.60));
+      /* ✅ BIGGER replacement canvases (fix too-small words) */
+      const w = Math.max(520, r.width  * (scale * 2.75));
+      const h = Math.max(260, r.height * (scale * 2.35));
 
       obj.canvas.style.left = cx+"px";
       obj.canvas.style.top  = cy+"px";
