@@ -305,10 +305,10 @@
             ph: rng()*Math.PI*2,
             pulse: 0.005 + rng()*0.010,
 
-            // ✅ micro drift params (slightly more noticeable, still safe)
-            ax: 0.22 + rng()*0.18,   // 0.22~0.40px
-            ay: 0.20 + rng()*0.16,   // 0.20~0.36px
-            spd: 0.55 + rng()*0.55
+            // ✅ VERY subtle drift - barely noticeable
+            ax: 0.10 + rng()*0.08,   // 0.10~0.18px max drift
+            ay: 0.08 + rng()*0.06,   // 0.08~0.14px max drift
+            spd: 0.25 + rng()*0.20   // very slow speed
           });
         }
       }
@@ -320,9 +320,9 @@
     ctx.fillStyle = color;
     const tt = t*0.001;
     for(const p of pts){
-      // ✅ readability-safe micro drift (<= ~0.40px)
-      const ox = Math.sin(tt*(0.85*p.spd) + p.ph) * p.ax;
-      const oy = Math.cos(tt*(0.78*p.spd) + p.ph) * p.ay;
+      // ✅ very subtle micro drift
+      const ox = Math.sin(tt*(0.70*p.spd) + p.ph) * p.ax;
+      const oy = Math.cos(tt*(0.65*p.spd) + p.ph) * p.ay;
 
       const rr = p.r0 * (1 + Math.sin(tt*0.55 + p.ph) * p.pulse);
       ctx.beginPath();
