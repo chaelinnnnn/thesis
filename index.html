@@ -30,21 +30,25 @@
       z-index:2;
     }
 
-    /* ✅ micro motion (readability-safe) */
+    /* ✅ micro motion (readability-safe, and robust var parsing) */
     .w{
       display:inline-block;
       padding:0 .06em;
       transform: translateZ(0);
       will-change: transform;
-      animation: microFloat var(--mfDur, 6.8s) ease-in-out infinite;
+
+      animation-name: microFloat;
+      animation-duration: var(--mfDur, 7.2s);
+      animation-timing-function: ease-in-out;
+      animation-iteration-count: infinite;
       animation-delay: var(--mfDelay, 0s);
     }
     .w.hideInk{ color:transparent; animation: none; }
 
     @keyframes microFloat{
       0%   { transform: translate3d(0,0,0) rotate(0deg); }
-      33%  { transform: translate3d(var(--mx, .45px), var(--my, -.35px), 0) rotate(var(--mr, .10deg)); }
-      66%  { transform: translate3d(calc(var(--mx, .45px) * -0.65), calc(var(--my, -.35px) * -0.55), 0) rotate(calc(var(--mr, .10deg) * -0.65)); }
+      33%  { transform: translate3d(var(--mx, .55px), var(--my, -.45px), 0) rotate(var(--mr, .10deg)); }
+      66%  { transform: translate3d(calc(var(--mx, .55px) * -0.65), calc(var(--my, -.45px) * -0.55), 0) rotate(calc(var(--mr, .10deg) * -0.65)); }
       100% { transform: translate3d(0,0,0) rotate(0deg); }
     }
 
@@ -77,7 +81,7 @@
       touch-action:none;
     }
 
-    /* ✅ lens look (thicker rim + real glass feel) */
+    /* ✅ lens: thicker rim + real glass feel */
     #lens .glass{
       position:absolute;
       inset:0;
@@ -188,12 +192,12 @@
     sp.className="w";
     sp.textContent=w;
 
-    // ✅ readability-safe micro motion params (very small)
-    const dur = 6.2 + Math.random()*4.2;       // 6.2s ~ 10.4s
-    const delay = -(Math.random()*6.0);        // negative for desync
-    const mx = (Math.random()*0.9 - 0.45);     // -0.45px ~ 0.45px
-    const my = (Math.random()*0.8 - 0.40);     // -0.40px ~ 0.40px
-    const mr = (Math.random()*0.18 - 0.09);    // -0.09deg ~ 0.09deg
+    // ✅ readability-safe micro motion params (now slightly more noticeable)
+    const dur = 6.2 + Math.random()*4.2;      // 6.2s ~ 10.4s
+    const delay = -(Math.random()*6.0);       // negative for desync
+    const mx = (Math.random()*1.4 - 0.70);    // -0.70px ~ 0.70px
+    const my = (Math.random()*1.2 - 0.60);    // -0.60px ~ 0.60px
+    const mr = (Math.random()*0.20 - 0.10);   // -0.10deg ~ 0.10deg
     sp.style.setProperty("--mfDur", dur.toFixed(2)+"s");
     sp.style.setProperty("--mfDelay", delay.toFixed(2)+"s");
     sp.style.setProperty("--mx", mx.toFixed(2)+"px");
@@ -300,10 +304,11 @@
             r0: 1.6 + rng()*0.9,
             ph: rng()*Math.PI*2,
             pulse: 0.005 + rng()*0.010,
-            /* ✅ micro drift params (super subtle) */
-            ax: 0.18 + rng()*0.18,   // 0.18~0.36 px
-            ay: 0.16 + rng()*0.16,   // 0.16~0.32 px
-            spd: 0.55 + rng()*0.55   // speed multiplier
+
+            // ✅ micro drift params (slightly more noticeable, still safe)
+            ax: 0.22 + rng()*0.18,   // 0.22~0.40px
+            ay: 0.20 + rng()*0.16,   // 0.20~0.36px
+            spd: 0.55 + rng()*0.55
           });
         }
       }
@@ -315,7 +320,7 @@
     ctx.fillStyle = color;
     const tt = t*0.001;
     for(const p of pts){
-      // ✅ readability-safe micro drift (<= ~0.35px)
+      // ✅ readability-safe micro drift (<= ~0.40px)
       const ox = Math.sin(tt*(0.85*p.spd) + p.ph) * p.ax;
       const oy = Math.cos(tt*(0.78*p.spd) + p.ph) * p.ay;
 
