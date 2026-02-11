@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Appropriation — Viral Lens (Gooey Spread, Readable)</title>
+  <title>Appropriation — Viral Lens (Goo + Readable Text)</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -13,10 +13,10 @@
       --lensSize: 200px;
       --fadeSeconds: 6.5;
 
-      /* ✅ readable goo knobs */
-      --blurPx: 6;          /* lower = less sticky */
-      --thresh: 170;        /* higher = less merging */
-      --front: 0.05;        /* thinner spreading front */
+      /* ✅ goo tuned to be “texture”, not “shape” */
+      --blurPx: 4;        /* smaller blur = less melty */
+      --thresh: 205;      /* higher = less merging */
+      --front: 0.04;      /* thinner front swell */
     }
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
@@ -49,7 +49,7 @@
       animation-iteration-count: infinite;
       animation-delay: var(--mfDelay, 0s);
     }
-    /* when discovered, original ink is hidden + motion stops */
+    /* discovered: hide original ink + stop motion */
     .w.hideInk{ color:transparent; animation:none; }
 
     @keyframes microFloat{
@@ -85,7 +85,7 @@
       touch-action:none;
     }
 
-    /* lens: thicker rim + glass feel */
+    /* lens */
     #lens .glass{
       position:absolute;
       inset:0;
@@ -190,7 +190,7 @@
     sp.className="w";
     sp.textContent=w;
 
-    // micro motion params (original only)
+    // micro motion params
     const dur = 6.2 + Math.random()*4.2;
     const delay = -(Math.random()*6.0);
     const mx = (Math.random()*1.4 - 0.70);
@@ -234,7 +234,7 @@
     return { ctx, dpr };
   }
 
-  // --- measure + fit text to span box (auto size) ---
+  // measure + fit
   function measureTextBounds(text, font){
     const c = document.createElement("canvas");
     const ctx = c.getContext("2d");
@@ -262,7 +262,7 @@
     const font = `900 ${fontSize}px ${fontFamily}`;
     const m2 = measureTextBounds(text, font);
 
-    const pad = Math.round(Math.max(10, Math.min(36, Math.min(targetW, targetH) * 0.12)));
+    const pad = Math.round(Math.max(10, Math.min(34, Math.min(targetW, targetH) * 0.12)));
     const w = Math.ceil(targetW + pad*2);
     const h = Math.ceil(targetH + pad*2);
 
@@ -274,6 +274,7 @@
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.clearRect(0,0,w,h);
 
+    // draw text into this local canvas (for sampling)
     ctx.font = font;
     ctx.textAlign="left";
     ctx.textBaseline="alphabetic";
@@ -285,8 +286,9 @@
 
     const img = ctx.getImageData(0,0,c.width,c.height).data;
 
+    // particles
     const pts = [];
-    const samplingDensity = 4; // ✅ less dense = more readable
+    const samplingDensity = 4;
     for(let yy=0; yy<h; yy+=samplingDensity){
       for(let xx=0; xx<w; xx+=samplingDensity){
         const px = Math.floor(xx * dpr);
@@ -299,46 +301,45 @@
           pts.push({
             x: xx + jitterX,
             y: yy + jitterY,
-            r0: 1.25 + rng()*0.85,  // ✅ smaller blobs = readable strokes
+            r0: 0.95 + rng()*0.65,   // ✅ much smaller = goo is texture
             ph: rng()*Math.PI*2,
-            ax: 0.26 + rng()*0.22,
-            ay: 0.24 + rng()*0.20,
+            ax: 0.22 + rng()*0.18,
+            ay: 0.20 + rng()*0.16,
             spd: 0.55 + rng()*0.60
           });
         }
       }
     }
 
-    // infection order (spread from a few seeds)
+    // infection order
     const seedCount = Math.min(4, Math.max(2, Math.floor(pts.length/900)));
     const seeds = [];
-    for(let i=0;i<seedCount;i++){
-      seeds.push(pts[Math.floor(rng()*pts.length)]);
-    }
+    for(let i=0;i<seedCount;i++) seeds.push(pts[Math.floor(rng()*pts.length)]);
     for(const p of pts){
       let d = Infinity;
       for(const s of seeds){
         const dx = p.x - s.x, dy = p.y - s.y;
         d = Math.min(d, Math.hypot(dx,dy));
       }
-      p.d = d + (rng()-0.5)*7.0;
+      p.d = d + (rng()-0.5)*6.0;
     }
     pts.sort((a,b)=>a.d-b.d);
     for(let i=0;i<pts.length;i++){
-      pts[i].rank = i/(pts.length-1); // 0..1
+      pts[i].rank = i/(pts.length-1);
     }
 
-    return { pts, w, h };
+    // return everything needed to render *actual* readable text on top
+    return { pts, w, h, font, text, textX: x, textY: y };
   }
 
-  // Goo render: draw circles -> blur -> threshold -> tint + crisp skeleton overlay
+  // Goo render: circles -> blur -> threshold -> tint (below) + readable fillText (above)
   function gooRender(mainCtx, obj, t, color){
     const tt = t*0.001;
     const prog = obj.prog;
 
-    const blurPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--blurPx")) || 6;
-    const thresh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--thresh")) || 170;
-    const front  = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--front")) || 0.05;
+    const blurPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--blurPx")) || 4;
+    const thresh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--thresh")) || 205;
+    const front  = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--front")) || 0.04;
 
     const off = obj.off;
     const offCtx = obj.offCtx;
@@ -350,18 +351,18 @@
     const dx = Math.floor((ow - obj.data.w)/2);
     const dy = Math.floor((oh - obj.data.h)/2);
 
-    // 1) draw field circles (mask in black)
+    // 1) draw mask circles
     offCtx.save();
     offCtx.translate(dx, dy);
 
-    const wig = (1 - Math.min(1, prog*1.15)) * 0.55;
-
+    const wig = (1 - Math.min(1, prog*1.05)) * 0.45;
     offCtx.fillStyle = "#000";
+
     for(const p of obj.data.pts){
       if(p.rank > prog) continue;
 
       const edge = Math.max(0, 1 - Math.abs(p.rank - prog)/front);
-      const swell = 1 + edge * (0.55 + 0.22*Math.sin(tt*5.0 + p.ph));
+      const swell = 1 + edge * (0.38 + 0.18*Math.sin(tt*5.2 + p.ph));
 
       const ox = Math.sin(tt*(0.9*p.spd) + p.ph) * p.ax * wig;
       const oy = Math.cos(tt*(0.8*p.spd) + p.ph) * p.ay * wig;
@@ -372,41 +373,43 @@
       offCtx.fill();
     }
 
-    // 2) spores outside letters (reduced + delayed for legibility)
+    // 2) spores (very subtle + low alpha so it won’t destroy letters)
     if(!obj.spores){
       const rng = makeRng(hashStr(obj.key + "::spores"));
       obj.spores = [];
-      const n = 28; // ✅ reduced
+      const n = 14;
       const cx = obj.data.w/2, cy = obj.data.h/2;
       for(let i=0;i<n;i++){
         const ang = rng()*Math.PI*2;
-        const dist = 14 + rng()*Math.min(78, Math.min(obj.data.w, obj.data.h)*0.30);
+        const dist = 18 + rng()*Math.min(74, Math.min(obj.data.w, obj.data.h)*0.28);
         obj.spores.push({
           x: cx + Math.cos(ang)*dist,
           y: cy + Math.sin(ang)*dist,
-          r: 1.1 + rng()*1.3,
+          r: 0.85 + rng()*0.85,
           ph: rng()*Math.PI*2,
           spd: 0.8 + rng()*0.9
         });
       }
     }
-    const spStrength = Math.max(0, Math.min(1, (prog - 0.18) / 0.60)); // ✅ delayed start
+    const spStrength = Math.max(0, Math.min(1, (prog - 0.22) / 0.65));
     if(spStrength > 0){
+      offCtx.save();
+      offCtx.globalAlpha = 0.35 * spStrength; // ✅ low impact
       for(const s of obj.spores){
-        const drift = 0.7 + spStrength*1.8;
+        const drift = 0.6 + spStrength*1.3;
         const jx = Math.cos(tt*1.8*s.spd + s.ph) * drift;
         const jy = Math.sin(tt*1.6*s.spd + s.ph) * drift;
-        const rr = s.r * (1 + 0.28*Math.sin(tt*4.0 + s.ph)) * (0.35 + 0.7*spStrength);
-
+        const rr = s.r * (1 + 0.25*Math.sin(tt*4.0 + s.ph));
         offCtx.beginPath();
         offCtx.arc(s.x + jx, s.y + jy, rr, 0, Math.PI*2);
         offCtx.fill();
       }
+      offCtx.restore();
     }
 
     offCtx.restore();
 
-    // 3) blur the mask into goo
+    // 3) blur mask
     const bctx = obj.blurCtx;
     bctx.setTransform(1,0,0,1,0,0);
     bctx.clearRect(0,0,ow,oh);
@@ -414,28 +417,26 @@
     bctx.drawImage(off, 0, 0);
     bctx.filter = "none";
 
-    // 4) threshold alpha
+    // 4) threshold alpha (tight band)
     const img = bctx.getImageData(0,0,ow,oh);
     const d = img.data;
 
     const t0 = thresh;
-    const t1 = Math.min(255, thresh + 26); // ✅ tighter band for crispness
+    const t1 = Math.min(255, thresh + 18);
 
     for(let i=0;i<d.length;i+=4){
       const a = d[i+3];
-      if(a <= t0){
-        d[i+3] = 0;
-      } else if(a >= t1){
-        d[i+3] = 255;
-      } else {
+      if(a <= t0) d[i+3] = 0;
+      else if(a >= t1) d[i+3] = 255;
+      else {
         const u = (a - t0) / (t1 - t0);
         d[i+3] = Math.floor(255 * u);
       }
-      d[i] = 0; d[i+1] = 0; d[i+2] = 0;
+      d[i]=0; d[i+1]=0; d[i+2]=0;
     }
     bctx.putImageData(img,0,0);
 
-    // 5) tint with destination-in
+    // 5) tint goo
     offCtx.setTransform(1,0,0,1,0,0);
     offCtx.clearRect(0,0,ow,oh);
     offCtx.fillStyle = color;
@@ -444,26 +445,31 @@
     offCtx.drawImage(obj.blur,0,0);
     offCtx.globalCompositeOperation = "source-over";
 
-    // 6) draw goo to main
+    // draw goo under
     mainCtx.drawImage(off, 0, 0);
 
-    // ✅ 6.5) crisp skeleton overlay to preserve legibility
-    const crisp = Math.max(0, Math.min(1, (prog - 0.18) / 0.55));
-    if (crisp > 0){
+    // 6) ✅ readable text on top (this is what fixes legibility)
+    const textAlpha = Math.max(0, Math.min(1, (prog - 0.12) / 0.55));
+    if(textAlpha > 0){
       mainCtx.save();
-      mainCtx.globalAlpha = 0.55 * crisp;
+      mainCtx.globalAlpha = 0.92 * textAlpha;
       mainCtx.fillStyle = color;
+      mainCtx.font = obj.data.font;
+      mainCtx.textAlign = "left";
+      mainCtx.textBaseline = "alphabetic";
 
-      // align to same dx/dy
-      mainCtx.translate(dx, dy);
+      // subtle “organic” shimmer WITHOUT losing shape
+      const shimmer = 0.35 * (1 - textAlpha) * Math.sin(tt*10.0);
+      mainCtx.translate(dx + shimmer, dy);
 
-      for (const p of obj.data.pts){
-        if (p.rank > prog) continue;
-        const rr = Math.max(0.85, p.r0 * 0.55);
-        mainCtx.beginPath();
-        mainCtx.arc(p.x, p.y, rr, 0, Math.PI*2);
-        mainCtx.fill();
-      }
+      mainCtx.fillText(obj.data.text, obj.data.textX, obj.data.textY);
+
+      // tiny “edge fatten” to fight blur perception
+      mainCtx.globalAlpha = 0.25 * textAlpha;
+      mainCtx.lineWidth = 1.0;
+      mainCtx.strokeStyle = color;
+      mainCtx.strokeText(obj.data.text, obj.data.textX, obj.data.textY);
+
       mainCtx.restore();
     }
   }
@@ -557,13 +563,12 @@
       }
     }
 
-    // render infected canvases
+    // render
     for(const obj of infected.values()){
-      // spread speed
       obj.prog = clamp01(Math.max(obj.prog, (now-obj.startedAt)/5200));
 
-      // hide original ink only after infection is visible
-      if(obj.prog > 0.12) obj.span.classList.add("hideInk");
+      // hide original ink once infection begins
+      if(obj.prog > 0.10) obj.span.classList.add("hideInk");
 
       const r = obj.span.getBoundingClientRect();
       const cx = r.left + r.width/2;
@@ -582,7 +587,6 @@
       const cw = Math.round(canvasW);
       const ch = Math.round(canvasH);
 
-      // recompute particles when size changes
       const tw = Math.round(targetW);
       const th = Math.round(targetH);
       if(!obj.data || obj.lastTW !== tw || obj.lastTH !== th){
@@ -591,20 +595,14 @@
         obj.spores = null;
       }
 
-      // main visible canvas
       const main = ensureCanvas(obj.canvas, cw, ch);
       const mainCtx = main.ctx;
       mainCtx.clearRect(0,0,cw,ch);
 
-      // offscreen buffers
       if(obj.offW !== cw || obj.offH !== ch || !obj.offCtx || !obj.blurCtx){
         obj.offW = cw; obj.offH = ch;
-
-        obj.off.width  = cw;
-        obj.off.height = ch;
-        obj.blur.width  = cw;
-        obj.blur.height = ch;
-
+        obj.off.width  = cw; obj.off.height = ch;
+        obj.blur.width = cw; obj.blur.height = ch;
         obj.offCtx  = obj.off.getContext("2d", { willReadFrequently: true });
         obj.blurCtx = obj.blur.getContext("2d", { willReadFrequently: true });
       }
