@@ -9,8 +9,8 @@
       --bg:#ffffff;
       --ink:#111;
       --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      --lensSize: 200px;       /* ✅ lens size */
-      --fadeSeconds: 6.5;      /* faster to black */
+      --lensSize: 200px;
+      --fadeSeconds: 6.5;
     }
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
@@ -50,13 +50,11 @@
       z-index:10; pointer-events:auto; touch-action:none;
     }
 
-    /* ✅ Real glass look: no stroke ring, more thickness */
     #lens .glass{
       position:absolute;
       inset:0;
       border-radius:999px;
       overflow:hidden;
-
       background: radial-gradient(
         circle at 35% 30%,
         rgba(255,255,255,.85) 0%,
@@ -65,14 +63,12 @@
         rgba(255,255,255,.03) 75%,
         rgba(255,255,255,.01) 100%
       );
-
       box-shadow:
         0 30px 80px rgba(0,0,0,.25),
         inset 0 20px 35px rgba(255,255,255,.6),
         inset 0 -25px 40px rgba(0,0,0,.18),
         inset 0 0 40px rgba(0,0,0,.12);
     }
-
     #lens .glass::before{
       content:""; position:absolute; inset:-50px;
       background:
@@ -104,7 +100,6 @@
 
   <div id="lens">
     <div class="glass"></div>
-    <!-- ✅ removed lens handle / weird circle -->
   </div>
 
   <div class="hint">Drag lens over: beauty / merchandise / making</div>
@@ -130,7 +125,7 @@
     return null;
   }
 
-  // sentence (keep spacing correct)
+  // sentence
   sentence.textContent = "";
   const words = TEXT.split(" ");
   words.forEach((w,i)=>{
@@ -168,7 +163,18 @@
     return ctx;
   }
 
-  // mask
+  // --- measure text bounds in offscreen canvas (to auto-fit) ---
+  function measureTextBounds(text, font){
+    const c = document.createElement("canvas");
+    const ctx = c.getContext("2d");
+    ctx.font = font;
+    const m = ctx.measureText(text);
+    const w = Math.ceil(m.width);
+    const h = Math.ceil((m.actualBoundingBoxAscent || 0) + (m.actualBoundingBoxDescent || 0)) || 1;
+    const ascent = Math.ceil(m.actualBoundingBoxAscent || h*0.75);
+    return { w, h, ascent };
+  }
+
   function buildMask(text, w, h, font){
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     const c = document.createElement("canvas");
@@ -178,57 +184,70 @@
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.clearRect(0,0,w,h);
     ctx.font = font;
-    ctx.textAlign="center";
-    ctx.textBaseline="middle";
+    ctx.textAlign="left";
+    ctx.textBaseline="alphabetic";
     ctx.fillStyle="#000";
-    ctx.fillText(text, w/2, h/2);
-    const img = ctx.getImageData(0,0,c.width,c.height).data;
-    return { img, mw:c.width, mh:c.height, dpr };
-  }
-  function alphaAt(mask, x, y, iw, ih){
-    const px = Math.floor(Math.max(0, Math.min(iw-1, x)) * mask.dpr);
-    const py = Math.floor(Math.max(0, Math.min(ih-1, y)) * mask.dpr);
-    const idx = (py*mask.mw + px)*4;
-    return mask.img[idx+3];
+    return { c, ctx, dpr };
   }
 
-  // ✅ particles from text pixels (bigger text)
-  function precomputeParticles_POISSON(text, w, h, seedKey){
+  function precomputeParticles_FIT(text, targetW, targetH, seedKey){
     const rng = makeRng(hashStr(seedKey));
 
-    /* ✅ pad reduced: more room for big letters */
-    const pad = Math.round(Math.max(18, Math.min(60, Math.min(w,h) * 0.12)));
-    const iw = w - pad*2;
-    const ih = h - pad*2;
+    // Start with a big font, then scale down/up to fit span box
+    const baseFontSize = 240;
+    const fontFamily = getComputedStyle(document.body).getPropertyValue("--sans") || "system-ui";
+    const baseFont = `900 ${baseFontSize}px ${fontFamily}`;
 
-    /* ✅ allow font to scale up more aggressively */
-    const fontSize = Math.max(44, Math.min(260, Math.floor(ih * 0.92)));
-    const font = `900 ${fontSize}px ${getComputedStyle(document.body).getPropertyValue("--sans") || "system-ui"}`;
-    const mask = buildMask(text, iw, ih, font);
+    const base = measureTextBounds(text, baseFont);
 
+    // Fit scale to target box (keep some padding so it doesn't touch edges)
+    const padFactor = 0.86;
+    const sx = (targetW * padFactor) / Math.max(1, base.w);
+    const sy = (targetH * padFactor) / Math.max(1, base.h);
+    const fitScale = Math.min(sx, sy);
+
+    const fontSize = Math.max(18, Math.min(340, Math.floor(baseFontSize * fitScale)));
+    const font = `900 ${fontSize}px ${fontFamily}`;
+    const m2 = measureTextBounds(text, font);
+
+    // Canvas just big enough to cover target, with small margins
+    const pad = Math.round(Math.max(10, Math.min(36, Math.min(targetW, targetH) * 0.12)));
+    const w = Math.ceil(targetW + pad*2);
+    const h = Math.ceil(targetH + pad*2);
+
+    const { c, ctx } = buildMask(text, w, h, font);
+
+    // Draw text centered to target box, baseline controlled
+    const x = Math.floor((w - m2.w)/2);
+    const y = Math.floor((h - m2.h)/2) + m2.ascent;
+
+    ctx.fillText(text, x, y);
+    const img = ctx.getImageData(0,0,c.width,c.height).data;
+
+    // Sample dots
     const pts = [];
     const samplingDensity = 4;
-
-    for(let y = 0; y < ih; y += samplingDensity){
-      for(let x = 0; x < iw; x += samplingDensity){
-        const a = alphaAt(mask, x, y, iw, ih);
+    for(let yy=0; yy<h; yy+=samplingDensity){
+      for(let xx=0; xx<w; xx+=samplingDensity){
+        const px = Math.floor(xx * (window.devicePixelRatio||1));
+        const py = Math.floor(yy * (window.devicePixelRatio||1));
+        const idx = (py * c.width + px) * 4;
+        const a = img[idx+3];
         if(a > 128){
-          const jitterX = (rng() - 0.5) * samplingDensity * 0.6;
-          const jitterY = (rng() - 0.5) * samplingDensity * 0.6;
-
+          const jitterX = (rng() - 0.5) * samplingDensity * 0.55;
+          const jitterY = (rng() - 0.5) * samplingDensity * 0.55;
           pts.push({
-            x: x + pad + jitterX,
-            y: y + pad + jitterY,
-            /* ✅ bigger dots: makes “weight” match original */
-            r0: 1.8 + rng() * 1.0,
+            x: xx + jitterX,
+            y: yy + jitterY,
+            r0: 1.6 + rng()*0.9,
             ph: rng()*Math.PI*2,
-            pulse: 0.005 + rng()*0.010,
-            blob: 1
+            pulse: 0.005 + rng()*0.010
           });
         }
       }
     }
-    return pts;
+
+    return { pts, w, h };
   }
 
   function render(ctx, pts, t, color){
@@ -262,9 +281,9 @@
       canvas,
       startedAt: performance.now(),
       prog: 0,
-      particles: null,
-      lastW: 0,
-      lastH: 0
+      data: null,
+      lastTW: 0,
+      lastTH: 0
     };
     infected.set(key, obj);
     if (!infectionStart) infectionStart = performance.now();
@@ -314,7 +333,6 @@
     const now = performance.now();
     const lensInfo = lensCenter();
 
-    // trigger
     for(const sp of spans){
       if(sp.dataset.hit!=="1") continue;
       if(isHit(sp, lensInfo)){
@@ -324,7 +342,6 @@
       }
     }
 
-    // render infected canvases
     for(const obj of infected.values()){
       obj.prog = clamp01(Math.max(obj.prog, (now-obj.startedAt)/6500));
 
@@ -332,30 +349,43 @@
       const cx = r.left + r.width/2;
       const cy = r.top  + r.height/2;
 
-      const scale = 1.08 + 0.08*obj.prog;
+      // ✅ target box = original span box (slightly expanded so it feels equal weight)
+      const targetW = Math.max(10, r.width  * 1.02);
+      const targetH = Math.max(10, r.height * 1.05);
 
-      /* ✅ BIGGER replacement canvases (fix too-small words) */
-      const w = Math.max(520, r.width  * (scale * 2.75));
-      const h = Math.max(260, r.height * (scale * 2.35));
+      // ✅ canvas around it (not huge)
+      const canvasW = Math.max(220, targetW * 1.35);
+      const canvasH = Math.max(140, targetH * 1.45);
 
       obj.canvas.style.left = cx+"px";
       obj.canvas.style.top  = cy+"px";
       obj.canvas.style.transform = "translate(-50%,-55%)";
 
-      const wInt = Math.round(w), hInt = Math.round(h);
-      if (!obj.particles || obj.lastW !== wInt || obj.lastH !== hInt){
-        obj.lastW = wInt; obj.lastH = hInt;
-        obj.particles = precomputeParticles_POISSON(obj.out, wInt, hInt, obj.key + ":" + obj.out);
+      const cw = Math.round(canvasW);
+      const ch = Math.round(canvasH);
+
+      // regenerate particles only when target changes
+      const tw = Math.round(targetW);
+      const th = Math.round(targetH);
+      if(!obj.data || obj.lastTW !== tw || obj.lastTH !== th){
+        obj.lastTW = tw; obj.lastTH = th;
+        obj.data = precomputeParticles_FIT(obj.out, tw, th, obj.key + ":" + obj.out);
       }
 
-      const ctx = ensureCanvas(obj.canvas, wInt, hInt);
-      ctx.clearRect(0,0,wInt,hInt);
+      const ctx = ensureCanvas(obj.canvas, cw, ch);
+      ctx.clearRect(0,0,cw,ch);
+
+      // center the fitted text-canvas inside our canvas
+      const dx = Math.floor((cw - obj.data.w)/2);
+      const dy = Math.floor((ch - obj.data.h)/2);
+      ctx.save();
+      ctx.translate(dx, dy);
 
       const isFinal = document.body.classList.contains("final");
-      render(ctx, obj.particles, t, isFinal ? "#ffffff" : "#111111");
+      render(ctx, obj.data.pts, t, isFinal ? "#ffffff" : "#111111");
+      ctx.restore();
     }
 
-    // blackout → final
     if(infectionStart){
       const seconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fadeSeconds")) || 6.5;
       const globalProg = clamp01((now - infectionStart) / (seconds*1000));
