@@ -1,180 +1,479 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Appropriation Infection</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Appropriation Lens — Readable Viral Type</title>
+  <style>
+    :root{
+      --bg:#ffffff;
+      --ink:#111;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 
-<style>
-html,body{
-  margin:0;
-  background:#f5f5f5;
-  font-family:monospace;
-  overflow:hidden;
-}
+      /* Lens */
+      --lensSize: 520px;     /* 렌즈 크기 */
+      --magnify: 1.32;       /* 확대 배율 */
+    }
 
-#stage{
-  position:relative;
-  width:100vw;
-  height:100vh;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-}
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      background: var(--bg);
+      color: var(--ink);
+      overflow:hidden;
+    }
 
-#sentence{
-  font-size:40px;
-  line-height:1.4;
-  text-align:center;
-  width:900px;
-  position:relative;
-}
+    /* Stage */
+    .stage{
+      position:fixed;
+      inset:0;
+      display:grid;
+      place-items:center;
+      padding: 28px;
+    }
 
-.word{
-  position:relative;
-  display:inline-block;
-}
+    /* Base sentence */
+    .sentence{
+      width: min(1200px, 92vw);
+      text-align:center;
+      font-family: var(--sans);
+      font-weight: 650;
+      font-size: clamp(40px, 6vw, 96px);
+      line-height: 1.08;
+      letter-spacing: -0.02em;
+      user-select:none;
+      position:relative;
+      z-index: 1;
+    }
 
-canvas{
-  position:absolute;
-  pointer-events:none;
-}
+    /* token keeps spacing correct */
+    .w{
+      display:inline-block;
+      position:relative;
+      padding: 0 .06em;
+      white-space: pre; /* keep spaces if any */
+    }
 
-#lens{
-  position:absolute;
-  width:280px;
-  height:280px;
-  border-radius:50%;
-  border:2px solid rgba(0,0,0,.2);
-  backdrop-filter:blur(3px);
-  pointer-events:none;
-  mix-blend-mode:normal;
-}
-</style>
+    /* Lens wrapper */
+    #lens{
+      position:fixed;
+      width: var(--lensSize);
+      height: var(--lensSize);
+      border-radius: 999px;
+      left: 70%;
+      top: 44%;
+      transform: translate(-50%,-50%);
+      z-index: 50;
+      pointer-events:auto;
+      touch-action:none;
+    }
+
+    /* The glass */
+    #lens .glass{
+      position:absolute;
+      inset:0;
+      border-radius: 999px;
+      overflow:hidden;
+
+      /* glass edge + depth */
+      box-shadow:
+        0 24px 70px rgba(0,0,0,.18),
+        0 0 0 2px rgba(0,0,0,.18),
+        0 0 0 10px rgba(255,255,255,.65) inset,
+        0 -18px 34px rgba(0,0,0,.10) inset;
+      background: rgba(255,255,255,.02);
+    }
+
+    /* Highlight / glare */
+    #lens .glass::before{
+      content:"";
+      position:absolute;
+      inset:-40px;
+      background:
+        radial-gradient(circle at 30% 22%, rgba(255,255,255,.70), transparent 48%),
+        radial-gradient(circle at 78% 74%, rgba(255,255,255,.25), transparent 58%),
+        linear-gradient(135deg, rgba(255,255,255,.18), transparent 60%);
+      opacity:.55;
+      mix-blend-mode: screen;
+      pointer-events:none;
+    }
+
+    /* inner rim line */
+    #lens .glass::after{
+      content:"";
+      position:absolute;
+      inset:14px;
+      border-radius:999px;
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,.10) inset,
+        0 0 0 18px rgba(255,255,255,.08) inset;
+      pointer-events:none;
+    }
+
+    /* magnified view (cloned sentence) */
+    #lensView{
+      position:absolute;
+      left:0; top:0;
+      width:100%;
+      height:100%;
+      transform: scale(var(--magnify));
+      transform-origin: 0 0;
+      will-change: transform;
+      pointer-events:none;
+    }
+
+    /* The cloned sentence inside lens */
+    .sentence.clone{
+      width: min(1200px, 92vw);
+      position:absolute;
+      left:0;
+      top:0;
+      transform: translate(var(--cloneX,0px), var(--cloneY,0px));
+      transform-origin: 0 0;
+      z-index: 1;
+    }
+
+    /* Hide original words inside clone when replaced */
+    .w.mutated{
+      color: transparent;
+    }
+
+    /* Canvas for viral readable type */
+    canvas.viral{
+      position:absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%,-55%);
+      pointer-events:none;
+      filter: drop-shadow(0 18px 34px rgba(0,0,0,.12));
+    }
+
+    /* little handle dot just for “tool” feeling */
+    #lensHandle{
+      position:absolute;
+      width:46px; height:46px;
+      border-radius:999px;
+      right: 26px;
+      bottom: 26px;
+      background: rgba(255,255,255,.78);
+      border: 1px solid rgba(0,0,0,.12);
+      box-shadow: 0 12px 30px rgba(0,0,0,.14);
+      display:grid;
+      place-items:center;
+      pointer-events:none;
+    }
+    #lensHandle::before{
+      content:"";
+      width:12px; height:12px;
+      border-radius:999px;
+      background: rgba(0,0,0,.82);
+      box-shadow: 0 0 0 7px rgba(0,0,0,.06);
+    }
+
+    /* instruction small */
+    .hint{
+      position:fixed;
+      left: 16px;
+      bottom: 16px;
+      z-index: 100;
+      font-family: var(--sans);
+      font-size: 12px;
+      opacity: .65;
+      background: rgba(255,255,255,.86);
+      border: 1px solid rgba(0,0,0,.08);
+      padding: 8px 10px;
+      border-radius: 999px;
+      backdrop-filter: blur(4px);
+      user-select:none;
+    }
+  </style>
 </head>
 <body>
+  <div class="stage">
+    <div id="baseSentence" class="sentence" aria-label="Original sentence"></div>
+  </div>
 
-<div id="stage">
-  <div id="sentence"></div>
-  <div id="lens"></div>
-</div>
+  <div id="lens" aria-label="Magnifier lens">
+    <div class="glass">
+      <div id="lensView">
+        <div id="cloneSentence" class="sentence clone" aria-hidden="true"></div>
+      </div>
+      <div id="lensHandle" aria-hidden="true"></div>
+    </div>
+  </div>
 
-<script>
-const TEXT = "Then they discovered the beauty of merchandise and started making it relentlessly.";
+  <div class="hint">Drag the lens. Inside the lens: beauty→VALUATION, merchandise→COMMODITY, making→OPTIMIZING</div>
 
-const MAP = {
-  beauty: "VALUATION",
-  merchandise: "COMMODITY",
-  making: "OPTIMIZING"
-};
+  <script>
+    // ---------- CONFIG ----------
+    const TEXT = "Then they discovered the beauty of merchandise and started making it relentlessly.";
 
-const stage = document.getElementById("stage");
-const sentenceEl = document.getElementById("sentence");
-const lens = document.getElementById("lens");
+    // “더 정교한” 치환(전유) 버전
+    const MAP = [
+      { re: /^beauty$/i,      out: "VALUATION" },
+      { re: /^merchandise$/i, out: "COMMODITY" },
+      { re: /^making$/i,      out: "OPTIMIZING" },
+    ];
 
-let lensX = window.innerWidth/2;
-let lensY = window.innerHeight/2;
-let activeWord = null;
+    // Viral style controls (readability-first)
+    const VIRAL = {
+      dotColor: "#111",
+      faintFillAlpha: 0.22,     // 바탕 글자 (희미) — 읽힘 보장
+      outlineAlpha: 0.55,       // 얇은 윤곽 — 읽힘 보장
+      dotStep: 3,               // 낮을수록 촘촘
+      dotRadiusMin: 1.2,
+      dotRadiusMax: 2.6,
+      keepProb: 0.92,           // 높을수록 글자 형태 선명
+      jitter: 0.9,
+      fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+      weight: 900
+    };
 
-// --- Split sentence into words ---
-function renderSentence(){
-  const words = TEXT.split(" ");
-  words.forEach(w=>{
-    const clean = w.replace(/[.,]/g,"").toLowerCase();
-    const span = document.createElement("span");
-    span.className="word";
-    span.textContent = w + " ";
-    span.dataset.word = clean;
-    sentenceEl.appendChild(span);
-  });
-}
-renderSentence();
+    // ---------- HELPERS ----------
+    function tokenizeKeepPunct(text){
+      // split into words & punctuation but keep spaces in rendering as separate nodes
+      // We'll split by space, keep punctuation attached to words if any.
+      return text.split(" ");
+    }
+    function lookup(word){
+      const clean = word.replace(/[^\w']/g, ""); // remove punctuation for matching
+      for (const m of MAP){
+        if (m.re.test(clean)) return { clean, out: m.out };
+      }
+      return null;
+    }
+    function makeSpan(word){
+      const sp = document.createElement("span");
+      sp.className = "w";
+      sp.textContent = word;   // keep punctuation as shown
+      sp.dataset.word = word;
+      return sp;
+    }
 
-// --- Create viral canvas over word ---
-function infect(wordEl, replacement){
+    // ---------- RENDER BASE + CLONE ----------
+    const base = document.getElementById("baseSentence");
+    const clone = document.getElementById("cloneSentence");
 
-  if(wordEl.querySelector("canvas")) return;
+    function renderSentence(container, isClone){
+      container.textContent = "";
+      const words = tokenizeKeepPunct(TEXT);
 
-  const rect = wordEl.getBoundingClientRect();
-  const canvas = document.createElement("canvas");
-  canvas.width = rect.width*1.6;
-  canvas.height = rect.height*1.8;
-  canvas.style.left = "-20%";
-  canvas.style.top = "-40%";
+      words.forEach((w, i) => {
+        const sp = makeSpan(w);
+        container.appendChild(sp);
 
-  wordEl.style.color="transparent";
-  wordEl.appendChild(canvas);
+        // ✅ 띄어쓰기 정확히 유지: 단어 뒤에 " " 텍스트 노드를 따로 붙임
+        if (i !== words.length - 1){
+          container.appendChild(document.createTextNode(" "));
+        }
 
-  const ctx = canvas.getContext("2d");
-
-  const particles = [];
-  const letters = replacement.split("");
-
-  letters.forEach((letter,i)=>{
-    const baseX = 20 + i* (canvas.width/(letters.length+1));
-    const baseY = canvas.height/2;
-
-    for(let j=0;j<35;j++){
-      particles.push({
-        x: baseX + (Math.random()-0.5)*40,
-        y: baseY + (Math.random()-0.5)*40,
-        size: Math.random()*4+2,
-        vx: (Math.random()-0.5)*1.5,
-        vy: (Math.random()-0.5)*1.5,
-        targetX: baseX,
-        targetY: baseY
+        if (isClone){
+          const hit = lookup(w);
+          if (hit){
+            sp.dataset.mapped = hit.out;
+          }
+        }
       });
     }
-  });
 
-  function draw(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
+    renderSentence(base, false);
+    renderSentence(clone, true);
 
-    particles.forEach(p=>{
-      p.x += (p.targetX - p.x)*0.02 + p.vx;
-      p.y += (p.targetY - p.y)*0.02 + p.vy;
+    // ---------- VIRAL TEXT CANVAS (READABLE DOT-LETTER) ----------
+    function hashStr(s){
+      let h = 2166136261;
+      for (let i=0;i<s.length;i++){
+        h ^= s.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+      }
+      return h >>> 0;
+    }
 
-      ctx.beginPath();
-      ctx.arc(p.x,p.y,p.size,0,Math.PI*2);
-      ctx.fillStyle="#222";
-      ctx.fill();
-    });
+    function drawViral(canvas, text, w, h, seedKey){
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      canvas.style.width = w + "px";
+      canvas.style.height = h + "px";
 
-    requestAnimationFrame(draw);
-  }
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+      ctx.clearRect(0,0,w,h);
 
-  draw();
-}
+      // 1) base faint fill (ensures readability)
+      const fontSize = Math.max(24, Math.min(120, Math.floor(h * 0.62)));
+      ctx.font = `${VIRAL.weight} ${fontSize}px ${VIRAL.fontFamily}`;
+      ctx.textBaseline = "middle";
+      ctx.textAlign = "center";
 
-// --- Lens movement ---
-document.addEventListener("mousemove",(e)=>{
-  lensX=e.clientX;
-  lensY=e.clientY;
-  lens.style.left = lensX-140+"px";
-  lens.style.top = lensY-140+"px";
+      ctx.fillStyle = `rgba(0,0,0,${VIRAL.faintFillAlpha})`;
+      ctx.fillText(text, w/2, h/2);
 
-  checkInfection();
-});
+      // 2) outline (more readable)
+      ctx.lineWidth = Math.max(1, fontSize * 0.06);
+      ctx.strokeStyle = `rgba(0,0,0,${VIRAL.outlineAlpha})`;
+      ctx.strokeText(text, w/2, h/2);
 
-function checkInfection(){
-  const words = document.querySelectorAll(".word");
-  words.forEach(w=>{
-    const rect = w.getBoundingClientRect();
-    const centerX = rect.left + rect.width/2;
-    const centerY = rect.top + rect.height/2;
+      // 3) dot mask from text alpha (virus texture)
+      const mask = document.createElement("canvas");
+      mask.width = Math.floor(w * dpr);
+      mask.height = Math.floor(h * dpr);
+      const m = mask.getContext("2d");
+      m.setTransform(dpr,0,0,dpr,0,0);
+      m.clearRect(0,0,w,h);
 
-    const dist = Math.hypot(centerX - lensX, centerY - lensY);
+      m.fillStyle = "#000";
+      m.font = `${VIRAL.weight} ${fontSize}px ${VIRAL.fontFamily}`;
+      m.textBaseline = "middle";
+      m.textAlign = "center";
+      m.fillText(text, w/2, h/2);
 
-    if(dist < 140){
-      const key = w.dataset.word;
-      if(MAP[key]){
-        infect(w, MAP[key]);
+      const img = m.getImageData(0,0,mask.width,mask.height).data;
+
+      let seed = hashStr(seedKey) >>> 0;
+      function rand(){
+        seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+        return (seed >>> 0) / 4294967295;
+      }
+
+      ctx.fillStyle = VIRAL.dotColor;
+      const step = VIRAL.dotStep;
+
+      for (let yy=0; yy<h; yy+=step){
+        for (let xx=0; xx<w; xx+=step){
+          const px = Math.floor(xx * dpr);
+          const py = Math.floor(yy * dpr);
+          const idx = (py * mask.width + px) * 4;
+          const a = img[idx+3];
+          if (a > 14){
+            // more alpha -> more likely to keep (sharper letter shape)
+            const localProb = VIRAL.keepProb * (a/255);
+            if (rand() < localProb){
+              const r = VIRAL.dotRadiusMin + (VIRAL.dotRadiusMax - VIRAL.dotRadiusMin) * rand();
+              const jx = (rand()*2-1) * VIRAL.jitter;
+              const jy = (rand()*2-1) * VIRAL.jitter;
+              ctx.beginPath();
+              ctx.arc(xx + jx, yy + jy, r, 0, Math.PI*2);
+              ctx.fill();
+            }
+          }
+        }
       }
     }
-  });
-}
 
-</script>
+    // ---------- APPLY MUTATION INSIDE CLONE ----------
+    const canvasCache = new Map(); // span -> canvas
+    function applyMutations(){
+      const spans = clone.querySelectorAll(".w");
+      spans.forEach(sp => {
+        const out = sp.dataset.mapped;
+        if (!out) return;
+
+        // hide original word in clone
+        sp.classList.add("mutated");
+
+        // add / reuse canvas
+        let c = canvasCache.get(sp);
+        if (!c){
+          c = document.createElement("canvas");
+          c.className = "viral";
+          sp.appendChild(c);
+          canvasCache.set(sp, c);
+        }
+
+        // size based on span box (make it BIG like “found”)
+        const r = sp.getBoundingClientRect();
+        // scale multiplier per word (PRODUCT tends to look great bigger)
+        const wordClean = sp.textContent.replace(/[^\w']/g,"").toLowerCase();
+        let mult = 3.0;
+        if (wordClean === "merchandise") mult = 3.6;
+        if (wordClean === "beauty") mult = 3.2;
+        if (wordClean === "making") mult = 3.4;
+
+        const w = Math.max(180, r.width * mult);
+        const h = Math.max(78,  r.height * (mult * 0.78));
+
+        drawViral(c, out, Math.round(w), Math.round(h), out + ":" + w + "x" + h);
+      });
+    }
+
+    // ---------- REAL MAGNIFIER EFFECT ----------
+    const lens = document.getElementById("lens");
+    const lensView = document.getElementById("lensView");
+
+    let dragging = false;
+    let offX = 0, offY = 0;
+
+    function setLensPos(clientX, clientY){
+      const size = lens.getBoundingClientRect().width;
+      const x = Math.max(size*0.15, Math.min(window.innerWidth - size*0.15, clientX));
+      const y = Math.max(size*0.15, Math.min(window.innerHeight - size*0.15, clientY));
+      lens.style.left = x + "px";
+      lens.style.top = y + "px";
+
+      // move clone so that lens shows correct area, then magnify
+      // We want clone to be aligned with base sentence in world coords.
+      const baseRect = base.getBoundingClientRect();
+      const lensRect = lens.getBoundingClientRect();
+
+      // Position clone container: translate so its top-left matches base top-left
+      // But inside lensView (scaled), we shift by negative lens center to simulate magnification.
+      const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--magnify")) || 1.3;
+
+      // lensView origin is lens top-left. We want clone text to appear as if it's “zoomed into” what’s under the lens.
+      // So: clone is shifted by (baseLeft - lensLeft, baseTop - lensTop) then additionally by zoom compensation.
+      const dx = (baseRect.left - lensRect.left);
+      const dy = (baseRect.top  - lensRect.top);
+
+      // When scaling up, we need to counter-shift so the center stays stable:
+      const cx = lensRect.width/2;
+      const cy = lensRect.height/2;
+      const compX = -(cx * (scale - 1));
+      const compY = -(cy * (scale - 1));
+
+      clone.style.setProperty("--cloneX", (dx + compX) + "px");
+      clone.style.setProperty("--cloneY", (dy + compY) + "px");
+    }
+
+    lens.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      const r = lens.getBoundingClientRect();
+      offX = e.clientX - (r.left + r.width/2);
+      offY = e.clientY - (r.top  + r.height/2);
+      lens.setPointerCapture(e.pointerId);
+    });
+    lens.addEventListener("pointermove", (e) => {
+      if (!dragging) return;
+      setLensPos(e.clientX - offX, e.clientY - offY);
+    });
+    lens.addEventListener("pointerup", (e) => {
+      dragging = false;
+      try { lens.releasePointerCapture(e.pointerId); } catch {}
+    });
+
+    // start position
+    setLensPos(window.innerWidth*0.72, window.innerHeight*0.44);
+
+    // Recompute when layout changes
+    function relayout(){
+      // Must render viral after fonts/layout settle
+      applyMutations();
+      const r = lens.getBoundingClientRect();
+      setLensPos(r.left + r.width/2, r.top + r.height/2);
+    }
+
+    window.addEventListener("resize", relayout);
+    window.addEventListener("load", relayout);
+
+    // First layout pass (after a frame so rects are correct)
+    requestAnimationFrame(() => {
+      applyMutations();
+      // move lens once to align clone
+      const r = lens.getBoundingClientRect();
+      setLensPos(r.left + r.width/2, r.top + r.height/2);
+    });
+  </script>
 </body>
 </html>
-
