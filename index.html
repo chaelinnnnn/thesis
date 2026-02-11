@@ -9,9 +9,15 @@
       --bg:#ffffff;
       --ink:#111;
       --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+
       --lensSize: 200px;
       --fadeSeconds: 6.5;
+
+      /* ✅ magnifier tuning */
+      --mag: 1.18;             /* 확대 배율 (1.12~1.28 추천) */
+      --warp: 10;              /* 굴절 강도 (0~16 정도) */
     }
+
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
     body{ margin:0; background:var(--bg); color:var(--ink); overflow:hidden; }
@@ -45,41 +51,112 @@
     body.final #sentence{ opacity:0; transition:opacity 320ms ease; }
 
     #lens{
-      position:fixed; width:var(--lensSize); height:var(--lensSize); border-radius:999px;
-      left:72%; top:44%; transform:translate(-50%,-50%);
-      z-index:10; pointer-events:auto; touch-action:none;
+      position:fixed;
+      width:var(--lensSize);
+      height:var(--lensSize);
+      border-radius:999px;
+      left:72%;
+      top:44%;
+      transform:translate(-50%,-50%);
+      z-index:10;
+      pointer-events:auto;
+      touch-action:none;
     }
 
+    /* ✅ Real lens look: thicker rim + highlights + refraction feel */
     #lens .glass{
       position:absolute;
       inset:0;
       border-radius:999px;
       overflow:hidden;
-      background: radial-gradient(
-        circle at 35% 30%,
-        rgba(255,255,255,.85) 0%,
-        rgba(255,255,255,.35) 35%,
-        rgba(255,255,255,.12) 55%,
-        rgba(255,255,255,.03) 75%,
-        rgba(255,255,255,.01) 100%
-      );
-      box-shadow:
-        0 30px 80px rgba(0,0,0,.25),
-        inset 0 20px 35px rgba(255,255,255,.6),
-        inset 0 -25px 40px rgba(0,0,0,.18),
-        inset 0 0 40px rgba(0,0,0,.12);
-    }
-    #lens .glass::before{
-      content:""; position:absolute; inset:-50px;
+
       background:
-        radial-gradient(circle at 28% 20%, rgba(255,255,255,.75), transparent 52%),
-        radial-gradient(circle at 78% 74%, rgba(255,255,255,.22), transparent 60%),
-        linear-gradient(135deg, rgba(255,255,255,.16), transparent 62%);
-      opacity:.55;
-      mix-blend-mode:screen;
-      pointer-events:none;
-      filter: blur(0.2px);
+        radial-gradient(circle at 35% 28%,
+          rgba(255,255,255,.65) 0%,
+          rgba(255,255,255,.28) 26%,
+          rgba(255,255,255,.10) 52%,
+          rgba(0,0,0,.06) 78%,
+          rgba(0,0,0,.10) 100%);
+
+      backdrop-filter: blur(1.2px) brightness(1.06) contrast(1.06);
+      -webkit-backdrop-filter: blur(1.2px) brightness(1.06) contrast(1.06);
+
+      box-shadow:
+        0 34px 90px rgba(0,0,0,.28),
+        0 10px 22px rgba(0,0,0,.18),
+        inset 0 22px 36px rgba(255,255,255,.55),
+        inset 0 -30px 46px rgba(0,0,0,.22),
+        inset 0 0 46px rgba(0,0,0,.14);
     }
+
+    #lens .glass::before{
+      content:"";
+      position:absolute;
+      inset:-55px;
+      border-radius:999px;
+      pointer-events:none;
+
+      background:
+        radial-gradient(circle at 30% 20%, rgba(255,255,255,.75), transparent 52%),
+        radial-gradient(circle at 72% 78%, rgba(255,255,255,.20), transparent 60%),
+        radial-gradient(circle at 52% 58%, rgba(255,255,255,.10), transparent 62%),
+        linear-gradient(145deg, rgba(255,255,255,.16), transparent 64%);
+
+      mix-blend-mode:screen;
+      opacity:.70;
+      transform: translate3d(0,0,0) scale(1.02);
+      filter: blur(0.4px);
+    }
+
+    #lens .glass::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      border-radius:999px;
+      pointer-events:none;
+
+      background:
+        radial-gradient(circle,
+          rgba(255,255,255,.00) 58%,
+          rgba(255,255,255,.14) 64%,
+          rgba(0,0,0,.16) 78%,
+          rgba(0,0,0,.26) 100%);
+
+      box-shadow:
+        inset 0 0 0 1px rgba(255,255,255,.10),
+        inset 0 0 0 10px rgba(255,255,255,.05),
+        inset 0 -14px 22px rgba(0,0,0,.18),
+        inset 0 14px 22px rgba(255,255,255,.10);
+    }
+
+    /* ✅ Magnified scene clipped inside the lens */
+    #lensMag{
+      position:absolute;
+      inset:0;
+      border-radius:999px;
+      overflow:hidden;
+      pointer-events:none;
+      z-index:1; /* behind highlights (::before/after), but above background */
+    }
+
+    /* fixed clone of the sentence that we scale around the lens center */
+    #sentenceMag{
+      position:fixed;
+      left:0; top:0;
+      width:min(1200px,92vw);
+      text-align:center;
+      font-family:var(--sans);
+      font-weight:650;
+      font-size:clamp(40px,6vw,96px);
+      line-height:1.08;
+      letter-spacing:-0.02em;
+      user-select:none;
+      z-index:0;
+      transform-origin: 0 0;
+      will-change: transform, filter;
+      filter: url(#lensWarp);
+    }
+    #sentenceMag .w.hideInk{ color:transparent; }
 
     .hint{
       position:fixed; left:16px; bottom:16px; z-index:20;
@@ -94,12 +171,26 @@
   </style>
 </head>
 <body>
+  <!-- SVG filter for refraction-like distortion -->
+  <svg width="0" height="0" style="position:absolute">
+    <filter id="lensWarp" x="-20%" y="-20%" width="140%" height="140%">
+      <!-- base blur to soften “glass” -->
+      <feGaussianBlur in="SourceGraphic" stdDeviation="0.25" result="blurred"/>
+      <!-- turbulence as displacement map -->
+      <feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="7" result="noise"/>
+      <feDisplacementMap in="blurred" in2="noise" scale="10" xChannelSelector="R" yChannelSelector="G" />
+    </filter>
+  </svg>
+
   <div class="stage"><div id="sentence"></div></div>
   <div id="blackout"></div>
   <div id="overlay"></div>
 
   <div id="lens">
-    <div class="glass"></div>
+    <div class="glass">
+      <!-- ✅ magnified clone lives here -->
+      <div id="lensMag"></div>
+    </div>
   </div>
 
   <div class="hint">Drag lens over: beauty / merchandise / making</div>
@@ -117,6 +208,7 @@
   const overlay  = document.getElementById("overlay");
   const lens     = document.getElementById("lens");
   const blackout = document.getElementById("blackout");
+  const lensMag  = document.getElementById("lensMag");
 
   function cleanWord(w){ return w.replace(/[^\w']/g, ""); }
   function findTarget(word){
@@ -125,7 +217,7 @@
     return null;
   }
 
-  // sentence
+  // build sentence
   sentence.textContent = "";
   const words = TEXT.split(" ");
   words.forEach((w,i)=>{
@@ -137,6 +229,14 @@
     sentence.appendChild(sp);
     if(i!==words.length-1) sentence.appendChild(document.createTextNode(" "));
   });
+
+  // ✅ create magnified clone of sentence (DOM text magnification)
+  const magClone = sentence.cloneNode(true);
+  magClone.id = "sentenceMag";
+  lensMag.appendChild(magClone);
+
+  const spans = Array.from(sentence.querySelectorAll(".w"));
+  const magSpans = Array.from(magClone.querySelectorAll(".w"));
 
   // RNG
   function hashStr(s){
@@ -163,45 +263,26 @@
     return ctx;
   }
 
-  // --- measure text bounds in offscreen canvas (to auto-fit) ---
+  // --- measure + fit text to span box ---
   function measureTextBounds(text, font){
     const c = document.createElement("canvas");
     const ctx = c.getContext("2d");
     ctx.font = font;
     const m = ctx.measureText(text);
     const w = Math.ceil(m.width);
-    const h = Math.ceil((m.actualBoundingBoxAscent || 0) + (m.actualBoundingBoxDescent || 0)) || 1;
+    const h = Math.ceil((m.actualBoundingBoxAscent||0) + (m.actualBoundingBoxDescent||0)) || 1;
     const ascent = Math.ceil(m.actualBoundingBoxAscent || h*0.75);
     return { w, h, ascent };
   }
 
-  function buildMask(text, w, h, font){
-    const dpr = Math.max(1, window.devicePixelRatio || 1);
-    const c = document.createElement("canvas");
-    c.width = Math.floor(w*dpr);
-    c.height= Math.floor(h*dpr);
-    const ctx = c.getContext("2d");
-    ctx.setTransform(dpr,0,0,dpr,0,0);
-    ctx.clearRect(0,0,w,h);
-    ctx.font = font;
-    ctx.textAlign="left";
-    ctx.textBaseline="alphabetic";
-    ctx.fillStyle="#000";
-    return { c, ctx, dpr };
-  }
-
   function precomputeParticles_FIT(text, targetW, targetH, seedKey){
     const rng = makeRng(hashStr(seedKey));
-
-    // Start with a big font, then scale down/up to fit span box
     const baseFontSize = 240;
     const fontFamily = getComputedStyle(document.body).getPropertyValue("--sans") || "system-ui";
     const baseFont = `900 ${baseFontSize}px ${fontFamily}`;
 
     const base = measureTextBounds(text, baseFont);
-
-    // Fit scale to target box (keep some padding so it doesn't touch edges)
-    const padFactor = 0.86;
+    const padFactor = 0.86; // overall tightness in span box
     const sx = (targetW * padFactor) / Math.max(1, base.w);
     const sy = (targetH * padFactor) / Math.max(1, base.h);
     const fitScale = Math.min(sx, sy);
@@ -210,27 +291,35 @@
     const font = `900 ${fontSize}px ${fontFamily}`;
     const m2 = measureTextBounds(text, font);
 
-    // Canvas just big enough to cover target, with small margins
     const pad = Math.round(Math.max(10, Math.min(36, Math.min(targetW, targetH) * 0.12)));
     const w = Math.ceil(targetW + pad*2);
     const h = Math.ceil(targetH + pad*2);
 
-    const { c, ctx } = buildMask(text, w, h, font);
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    const c = document.createElement("canvas");
+    c.width = Math.floor(w*dpr);
+    c.height = Math.floor(h*dpr);
+    const ctx = c.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
 
-    // Draw text centered to target box, baseline controlled
+    ctx.font = font;
+    ctx.textAlign="left";
+    ctx.textBaseline="alphabetic";
+    ctx.fillStyle="#000";
+
     const x = Math.floor((w - m2.w)/2);
     const y = Math.floor((h - m2.h)/2) + m2.ascent;
-
     ctx.fillText(text, x, y);
+
     const img = ctx.getImageData(0,0,c.width,c.height).data;
 
-    // Sample dots
     const pts = [];
     const samplingDensity = 4;
     for(let yy=0; yy<h; yy+=samplingDensity){
       for(let xx=0; xx<w; xx+=samplingDensity){
-        const px = Math.floor(xx * (window.devicePixelRatio||1));
-        const py = Math.floor(yy * (window.devicePixelRatio||1));
+        const px = Math.floor(xx * dpr);
+        const py = Math.floor(yy * dpr);
         const idx = (py * c.width + px) * 4;
         const a = img[idx+3];
         if(a > 128){
@@ -246,7 +335,6 @@
         }
       }
     }
-
     return { pts, w, h };
   }
 
@@ -262,7 +350,6 @@
   }
 
   // infection
-  const spans = Array.from(sentence.querySelectorAll(".w"));
   const infected = new Map();
   let infectionStart = null;
 
@@ -292,7 +379,7 @@
 
   function lensCenter(){
     const r = lens.getBoundingClientRect();
-    return { cx:r.left+r.width/2, cy:r.top+r.height/2, rad:r.width/2 };
+    return { cx:r.left+r.width/2, cy:r.top+r.height/2, rad:r.width/2, rect:r };
   }
   function isHit(span, lensInfo){
     const r = span.getBoundingClientRect();
@@ -329,19 +416,39 @@
 
   function clamp01(x){ return Math.max(0, Math.min(1, x)); }
 
+  // ✅ update displacement strength live via CSS var (SVG filter scale is static, so we use a second filter trick)
+  // To keep it simple: we keep scale=10 in SVG and adjust perceived strength by extra scale on content around the lens.
+  function getMag(){
+    const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--mag"));
+    return isFinite(v) ? v : 1.18;
+  }
+
   function tick(t){
     const now = performance.now();
-    const lensInfo = lensCenter();
+    const info = lensCenter();
 
+    // ✅ magnification transform: scale around lens center
+    const mag = getMag();
+    // transform = T(cx,cy) * S(mag) * T(-cx,-cy)
+    magClone.style.transform =
+      `translate(${info.cx}px, ${info.cy}px) scale(${mag}) translate(${-info.cx}px, ${-info.cy}px)`;
+
+    // trigger
     for(const sp of spans){
       if(sp.dataset.hit!=="1") continue;
-      if(isHit(sp, lensInfo)){
+      if(isHit(sp, info)){
         const obj=ensureInfected(sp);
+
+        // hide original ink + hide magnified clone ink at same index
         sp.classList.add("hideInk");
+        const idx = spans.indexOf(sp);
+        if (idx >= 0 && magSpans[idx]) magSpans[idx].classList.add("hideInk");
+
         obj.canvas.classList.add("on");
       }
     }
 
+    // render infected canvases
     for(const obj of infected.values()){
       obj.prog = clamp01(Math.max(obj.prog, (now-obj.startedAt)/6500));
 
@@ -349,11 +456,9 @@
       const cx = r.left + r.width/2;
       const cy = r.top  + r.height/2;
 
-      // ✅ target box = original span box (slightly expanded so it feels equal weight)
       const targetW = Math.max(10, r.width  * 1.02);
       const targetH = Math.max(10, r.height * 1.05);
 
-      // ✅ canvas around it (not huge)
       const canvasW = Math.max(220, targetW * 1.35);
       const canvasH = Math.max(140, targetH * 1.45);
 
@@ -364,7 +469,6 @@
       const cw = Math.round(canvasW);
       const ch = Math.round(canvasH);
 
-      // regenerate particles only when target changes
       const tw = Math.round(targetW);
       const th = Math.round(targetH);
       if(!obj.data || obj.lastTW !== tw || obj.lastTH !== th){
@@ -375,7 +479,6 @@
       const ctx = ensureCanvas(obj.canvas, cw, ch);
       ctx.clearRect(0,0,cw,ch);
 
-      // center the fitted text-canvas inside our canvas
       const dx = Math.floor((cw - obj.data.w)/2);
       const dy = Math.floor((ch - obj.data.h)/2);
       ctx.save();
@@ -386,6 +489,7 @@
       ctx.restore();
     }
 
+    // blackout → final
     if(infectionStart){
       const seconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fadeSeconds")) || 6.5;
       const globalProg = clamp01((now - infectionStart) / (seconds*1000));
