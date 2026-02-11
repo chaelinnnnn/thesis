@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation — Viral Lens Infection</title>
+  <title>Appropriation — Viral Lens Infection (Blob)</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -11,7 +11,9 @@
       --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 
       --lensSize: 520px;
-      --fadeSeconds: 22; /* 감염 → 블랙 전환 총 시간(초) */
+
+      /* ✅ 더 빠르게 블랙 전환 */
+      --fadeSeconds: 10;
     }
 
     *{ box-sizing:border-box; }
@@ -21,10 +23,8 @@
       background: var(--bg);
       color: var(--ink);
       overflow:hidden;
-      transition: background 600ms linear;
     }
 
-    /* Stage & sentence */
     .stage{
       position:fixed;
       inset:0;
@@ -52,7 +52,6 @@
       padding: 0 .06em;
     }
 
-    /* Black fade overlay */
     #blackout{
       position:fixed;
       inset:0;
@@ -60,10 +59,9 @@
       opacity:0;
       pointer-events:none;
       z-index: 5;
-      transition: opacity 300ms linear;
+      transition: opacity 120ms linear;
     }
 
-    /* Viral overlay canvases */
     #overlay{
       position:fixed;
       inset:0;
@@ -75,22 +73,17 @@
       position:absolute;
       left:0; top:0;
       transform: translate(-50%,-55%);
-      filter: drop-shadow(0 18px 34px rgba(0,0,0,.16));
       will-change: transform, opacity;
       opacity:0;
       transition: opacity 180ms linear;
     }
     canvas.viral.on{ opacity:1; }
 
-    /* Hide only the original target words when replaced (but keep spacing) */
-    .w.hideInk{
-      color: transparent;
-    }
+    .w.hideInk{ color: transparent; }
 
-    /* Final state: hide entire sentence but keep layout (we will show only viral words) */
     body.final #sentence{
       opacity:0;
-      transition: opacity 600ms ease;
+      transition: opacity 450ms ease;
     }
 
     /* Lens */
@@ -192,27 +185,23 @@
     <div id="lensHandle" aria-hidden="true"></div>
   </div>
 
-  <div class="hint">Drag the lens over: beauty / merchandise / making</div>
+  <div class="hint">Drag lens over: beauty / merchandise / making</div>
 
 <script>
 (() => {
-  // ---------- TEXT & MAP ----------
   const TEXT = "Then they discovered the beauty of merchandise and started making it relentlessly.";
 
-  // “정교한 전유” 버전
   const TARGETS = [
     { re: /^beauty$/i, out: "VALUATION" },
     { re: /^merchandise$/i, out: "COMMODITY" },
     { re: /^making$/i, out: "OPTIMIZING" },
   ];
 
-  // ---------- DOM ----------
   const sentence = document.getElementById("sentence");
   const overlay  = document.getElementById("overlay");
   const lens     = document.getElementById("lens");
   const blackout = document.getElementById("blackout");
 
-  // ---------- HELPERS ----------
   function cleanWord(w){ return w.replace(/[^\w']/g, ""); }
   function findTarget(word){
     const c = cleanWord(word);
@@ -220,7 +209,7 @@
     return null;
   }
 
-  // Render with correct spacing (띄어쓰기 절대 안 깨짐)
+  // 띄어쓰기 안정 렌더
   function renderSentence(){
     sentence.textContent = "";
     const words = TEXT.split(" ");
@@ -228,6 +217,7 @@
       const sp = document.createElement("span");
       sp.className = "w";
       sp.textContent = w;
+
       const hit = findTarget(w);
       if (hit){
         sp.dataset.hit = "1";
@@ -240,7 +230,7 @@
   }
   renderSentence();
 
-  // ---------- VIRAL TYPE DRAW (더 “바이러스”처럼, 그런데 읽힘 유지) ----------
+  // -------- Blob viral drawing (video 느낌) --------
   function hashStr(s){
     let h = 2166136261;
     for (let i=0;i<s.length;i++){
@@ -250,7 +240,7 @@
     return h >>> 0;
   }
 
-  function drawViral(canvas, text, w, h, opts){
+  function drawBlobWord(canvas, text, w, h, opts){
     const dpr = Math.max(1, window.devicePixelRatio || 1);
     canvas.width = Math.floor(w * dpr);
     canvas.height = Math.floor(h * dpr);
@@ -261,17 +251,10 @@
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.clearRect(0,0,w,h);
 
-    const fontSize = Math.max(24, Math.min(140, Math.floor(h * 0.62)));
+    const fontSize = Math.max(26, Math.min(120, Math.floor(h * 0.62)));
     const font = `${opts.weight} ${fontSize}px ${opts.fontFamily}`;
 
-    // A) 아주 희미한 바탕 글자(읽힘 확보)
-    ctx.font = font;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillStyle = `rgba(255,255,255,${opts.baseAlpha})`; // 최종 흰색 대비용: 흰색 바탕에서 거의 안보이게 baseAlpha 조절
-    ctx.fillText(text, w/2, h/2);
-
-    // B) 마스크 텍스트
+    // mask 만들기
     const mask = document.createElement("canvas");
     mask.width = Math.floor(w * dpr);
     mask.height = Math.floor(h * dpr);
@@ -283,34 +266,33 @@
     m.textBaseline = "middle";
     m.fillStyle = "#000";
     m.fillText(text, w/2, h/2);
-
     const img = m.getImageData(0,0,mask.width,mask.height).data;
 
-    // Seeded RNG + time wobble
+    // seeded rng
     let seed = (hashStr(opts.seedKey) + ((opts.t*1000)|0)) >>> 0;
     function rand(){
       seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
       return (seed >>> 0) / 4294967295;
     }
 
-    // C) 도트 덩어리 (레퍼런스처럼 “뭉친” 형태)
-    ctx.fillStyle = opts.dotColor;
+    // ✅ 비디오처럼 회색 블롭
+    ctx.fillStyle = opts.blobColor;
 
-    // 움직임(살아있는 느낌): 시간에 따라 약간 흐르는 오프셋
-    const flowX = Math.sin(opts.t * 0.7) * 1.2;
-    const flowY = Math.cos(opts.t * 0.6) * 1.2;
+    // 미세 애니메이션 (꿈틀)
+    const flowX = Math.sin(opts.t * 0.8) * 1.1;
+    const flowY = Math.cos(opts.t * 0.7) * 1.1;
 
-    for (let yy=0; yy<h; yy+=opts.step){
-      for (let xx=0; xx<w; xx+=opts.step){
+    // 블롭 찍기: step 크게 + radius 큼 => “덩어리 글자”
+    const step = opts.step;
+    for (let yy=0; yy<h; yy+=step){
+      for (let xx=0; xx<w; xx+=step){
         const px = Math.floor(xx * dpr);
         const py = Math.floor(yy * dpr);
         const idx = (py * mask.width + px) * 4;
         const a = img[idx+3];
-        if (a > 18){
-          // 알파가 높은 중심부에 더 많이 찍어서 형태가 “글자”로 보이게
+        if (a > 10){
           const localProb = opts.keepProb * (a/255);
           if (rand() < localProb){
-            // “덩어리” 느낌: 반지름을 조금 키우고 중첩
             const rr = opts.rMin + (opts.rMax - opts.rMin) * rand();
             const jx = (rand()*2-1) * opts.jitter + flowX;
             const jy = (rand()*2-1) * opts.jitter + flowY;
@@ -322,18 +304,22 @@
       }
     }
 
-    // D) 얇은 윤곽(읽힘 강화, 레퍼런스처럼 딱딱한 느낌)
-    ctx.font = font;
-    ctx.lineWidth = Math.max(1, fontSize * 0.05);
-    ctx.strokeStyle = `rgba(255,255,255,${opts.outlineAlpha})`;
-    ctx.strokeText(text, w/2, h/2);
+    // 아주 약한 윤곽(읽힘 유지용) — 비디오 느낌 해치지 않을 정도만
+    if (opts.outlineAlpha > 0){
+      ctx.font = font;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.lineWidth = Math.max(1, fontSize * 0.03);
+      ctx.strokeStyle = `rgba(${opts.outlineRGB},${opts.outlineAlpha})`;
+      ctx.strokeText(text, w/2, h/2);
+    }
   }
 
-  // ---------- STATE ----------
+  // -------- Infection state --------
   const spans = Array.from(sentence.querySelectorAll(".w"));
-  const infected = new Map(); // key -> { span, out, prog(0..1), canvas, startedAt }
-  let infectionStart = null;  // first time any target is found
-  let globalProg = 0;         // 0..1
+  const infected = new Map(); // key -> obj
+  let infectionStart = null;
+  let globalProg = 0;
 
   function ensureInfected(span){
     const key = span.dataset.key;
@@ -351,17 +337,15 @@
     };
     infected.set(key, obj);
 
-    // 첫 감염 시작 시각
     if (!infectionStart) infectionStart = performance.now();
     return obj;
   }
 
-  // ---------- LENS HIT TEST ----------
+  // -------- Lens hit test --------
   function lensCenter(){
     const r = lens.getBoundingClientRect();
     return { cx: r.left + r.width/2, cy: r.top + r.height/2, rad: r.width/2 };
   }
-
   function isHit(span, lensInfo){
     const r = span.getBoundingClientRect();
     const wx = r.left + r.width/2;
@@ -369,9 +353,8 @@
     return ((wx - lensInfo.cx)**2 + (wy - lensInfo.cy)**2) <= (lensInfo.rad**2);
   }
 
-  // ---------- DRAG LENS ----------
-  let dragging = false;
-  let offX = 0, offY = 0;
+  // -------- Drag lens --------
+  let dragging = false, offX = 0, offY = 0;
 
   function setLensPos(x,y){
     const size = lens.getBoundingClientRect().width;
@@ -397,101 +380,90 @@
     try { lens.releasePointerCapture(e.pointerId); } catch {}
   });
 
-  // initial lens position
   setLensPos(window.innerWidth*0.74, window.innerHeight*0.44);
 
-  // ---------- ANIMATION LOOP ----------
   function clamp01(x){ return Math.max(0, Math.min(1, x)); }
 
   function tick(t){
     const now = performance.now();
     const lensInfo = lensCenter();
 
-    // 1) 발견(렌즈가 단어 위에 닿으면 감염 시작)
+    // 1) 발견
     for (const sp of spans){
       if (sp.dataset.hit !== "1") continue;
       if (isHit(sp, lensInfo)){
         const obj = ensureInfected(sp);
-        // 감염 시작 즉시 원 단어는 가리고(해당 단어만) 바이러스 단어가 “확대”되어 등장
         sp.classList.add("hideInk");
         obj.canvas.classList.add("on");
       }
     }
 
-    // 2) 개별 단어 감염 진행 + “바이러스 확대/증식” 연출
+    // 2) 단어 바이러스(크기 줄임 + 비디오 느낌 블롭)
     for (const obj of infected.values()){
-      // prog는 천천히 상승
-      const dt = (now - obj.startedAt) / 9000; // 단어 1개가 꽉 차는 속도(약 9초)
+      // ✅ 단어 감염 속도 (조금 빠르게)
+      const dt = (now - obj.startedAt) / 6500; // 6.5초 정도로
       obj.prog = clamp01(Math.max(obj.prog, dt));
 
       const r = obj.span.getBoundingClientRect();
-
-      // “해당 단어만” 크게: progress가 올라갈수록 점점 더 커지게
-      const baseScale = 2.6; // 처음부터 크게
-      const grow = 2.2;      // 더 커지는 폭
-      const scale = baseScale + grow * obj.prog;
-
-      // 캔버스 크기 (레퍼런스처럼 덩어리 글자)
-      const w = Math.max(240, r.width * scale);
-      const h = Math.max(110, r.height * (scale * 0.78));
-
-      // 위치: 단어 중심
       const cx = r.left + r.width/2;
       const cy = r.top  + r.height/2;
+
+      // ✅ 너무 컸던 사이즈 줄임
+      const baseScale = 1.55;   // (기존 2.6)
+      const grow      = 0.85;   // (기존 2.2)
+      const scale = baseScale + grow * obj.prog;
+
+      const w = Math.max(190, r.width * (scale * 1.45));
+      const h = Math.max(92,  r.height * (scale * 0.95));
 
       obj.canvas.style.left = cx + "px";
       obj.canvas.style.top  = cy + "px";
 
-      // 렌즈 안에서 “더 발견”된 느낌: 살짝 흔들리기
-      const wobX = Math.sin(t*0.001 + (obj.key.length*2)) * (2 + 3*obj.prog);
-      const wobY = Math.cos(t*0.0012 + (obj.key.length*3)) * (2 + 3*obj.prog);
+      // 미세 흔들림
+      const wobX = Math.sin(t*0.001 + (obj.key.length*2)) * (1.2 + 2.0*obj.prog);
+      const wobY = Math.cos(t*0.0011 + (obj.key.length*3)) * (1.2 + 2.0*obj.prog);
       obj.canvas.style.transform = `translate(-50%,-55%) translate(${wobX}px,${wobY}px)`;
 
-      // 감염 진행에 따라: 더 뭉치고 더 “바이러스”처럼
-      const opts = {
+      const isFinal = document.body.classList.contains("final");
+
+      drawBlobWord(obj.canvas, obj.out, Math.round(w), Math.round(h), {
         t: t*0.001,
         seedKey: obj.key + ":" + obj.out + ":" + (obj.prog*100).toFixed(1),
-        dotColor: (document.body.classList.contains("final") ? "#fff" : "#111"),
+
+        // ✅ 비디오 느낌: 회색 블롭(초반), 최종 흰색
+        blobColor: isFinal ? "#ffffff" : "#5a5a5a",
+
         fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
         weight: 900,
 
-        // 레퍼런스처럼 “덩어리”로 보이게 (progress↑ 할수록 더 촘촘/굵게)
-        step: Math.max(2, 3 - Math.floor(obj.prog*1.2)),   // 3 → 2
-        rMin: 1.2 + obj.prog*0.4,
-        rMax: 2.6 + obj.prog*1.4,
-        keepProb: 0.86 + obj.prog*0.10,                    // 중심부 유지 ↑
-        jitter: 1.2 + obj.prog*0.8,
+        // 블롭 파라미터 (레퍼런스처럼 큰 덩어리)
+        step: Math.max(7, 9 - Math.floor(obj.prog*2)),   // 9 → 7
+        rMin: 4.2 + obj.prog*0.6,
+        rMax: 9.0 + obj.prog*1.6,
+        keepProb: 0.72 + obj.prog*0.10,
+        jitter: 1.0 + obj.prog*0.8,
 
-        // 읽힘 유지용(초반엔 거의 안 보이게, 후반엔 대비 강화)
-        baseAlpha: document.body.classList.contains("final") ? 0.00 : 0.08,
-        outlineAlpha: document.body.classList.contains("final") ? 0.85 : (0.35 + obj.prog*0.25)
-      };
-
-      drawViral(obj.canvas, obj.out, Math.round(w), Math.round(h), opts);
+        // 읽힘 유지용 최소 윤곽
+        outlineAlpha: isFinal ? 0 : (0.18 + obj.prog*0.10),
+        outlineRGB: isFinal ? "255,255,255" : "255,255,255"
+      });
     }
 
-    // 3) 글로벌 감염 → 천천히 화면이 검게
+    // 3) 글로벌 감염 -> 더 빠르게 검게
     if (infectionStart){
-      const seconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fadeSeconds")) || 22;
+      const seconds = parseFloat(getComputedStyle(document.documentElement)
+        .getPropertyValue("--fadeSeconds")) || 10;
       globalProg = clamp01((now - infectionStart) / (seconds * 1000));
 
-      // 중간엔 조금 느리게, 후반 가속 (감염의 inevitability)
-      const eased = globalProg < 0.7
-        ? (globalProg * 0.7)
-        : (0.49 + (globalProg-0.7) / 0.3 * 0.51);
-
+      // ✅ 더 빨리 먹히는 이징(초반부터 확실히 어두워짐)
+      const eased = Math.pow(globalProg, 0.55); // < 1 => 초반 더 빠름
       blackout.style.opacity = String(eased);
 
-      // 4) 마지막: 블랙 + 변이 단어만 흰색으로 남기기
+      // 4) 마지막: 블랙 + 변이 단어만 흰색
       if (globalProg >= 0.995 && !document.body.classList.contains("final")){
         document.body.classList.add("final");
-        // 배경 확실히 검정
         blackout.style.opacity = "1";
-        // 렌즈 제거
         lens.style.display = "none";
-
-        // 바이러스 단어를 흰색으로 다시 그리도록 다음 프레임에서 반영됨
-        // (그리고 원문 전체는 서서히 사라짐)
       }
     }
 
@@ -500,7 +472,6 @@
 
   requestAnimationFrame(tick);
 
-  // On resize keep lens reasonable
   window.addEventListener("resize", () => {
     const r = lens.getBoundingClientRect();
     setLensPos(r.left + r.width/2, r.top + r.height/2);
