@@ -203,7 +203,7 @@
     return dif;
   }
 
-  // ✅ readable blobs: Poisson-ish placement (prevents holes + prevents blobs)
+  // ✅ IMPROVED: More readable particle placement
   function precomputeParticles_POISSON(text, w, h, seedKey){
     const rng = makeRng(hashStr(seedKey));
 
@@ -215,15 +215,14 @@
     const font = `900 ${fontSize}px ${getComputedStyle(document.body).getPropertyValue("--sans") || "system-ui"}`;
     const mask = buildMask(text, iw, ih, font);
 
-    // density control (more readable = more points)
-    const targetPts = Math.floor((iw*ih) / 95); // smaller -> more points
-    const maxAttempts = targetPts * 18;
+    // ✅ MUCH LOWER density - only outline particles
+    const targetPts = Math.floor((iw*ih) / 400);  // drastically reduced
+    const maxAttempts = targetPts * 20;
 
-    // grid accel for min-distance
-    // minDist varies: edge denser, core looser
-    const minDistEdge = 3.4;
-    const minDistCore = 6.2;
-    const cell = minDistEdge; // smallest
+    // ✅ MUCH LARGER spacing between particles
+    const minDistEdge = 8.5;  // outline only
+    const minDistCore = 15.0; // very sparse core
+    const cell = minDistEdge;
     const gw = Math.ceil(iw / cell);
     const gh = Math.ceil(ih / cell);
     const grid = new Array(gw*gh).fill(-1);
@@ -251,12 +250,12 @@
     }
 
     function radius(rng, isEdge){
-      // irregular particle sizes like reference (mostly small, sometimes medium)
+      // ✅ Smaller, more uniform particles
       const u = rng();
-      const base = isEdge ? 1.1 : 1.4;
-      const span = isEdge ? 2.2 : 2.8;
-      let r = base + (1 - Math.pow(u, 4.8)) * span; // biased small
-      if (rng() < 0.05) r *= 1.25 + rng()*0.35;     // rare bigger blobs
+      const base = isEdge ? 0.8 : 1.0;
+      const span = isEdge ? 1.2 : 1.5;
+      let r = base + (1 - Math.pow(u, 3.5)) * span;
+      if (rng() < 0.03) r *= 1.15;
       return r;
     }
 
@@ -275,18 +274,14 @@
       const inside = a/255;
       const e = edgeScore(mask, x, y, iw, ih);
 
-      // prefer edges strongly (readability)
-      const edgeBias = Math.min(1, e*4.2);  // 0..1
-      const coreBias = (inside > 0.35 && inside < 0.90) ? 1 : 0;
-
-      // acceptance prob:
-      // - edges: high
-      // - core: medium-low
-      // - solid interior: low
-      let pKeep = 0.0;
-      pKeep += 0.78 * edgeBias;
-      pKeep += coreBias ? (0.18 + 0.10*inside) : 0.0;
-      if (inside > 0.90 && edgeBias < 0.25) pKeep *= 0.25; // kill solid interior
+      // ✅ ONLY edges - completely kill interior
+      const edgeBias = Math.min(1, e*8.0);  // very strong edge detection
+      
+      // Accept ONLY if it's an edge
+      if (edgeBias < 0.4) continue;  // reject non-edges immediately
+      
+      let pKeep = edgeBias * 0.95;  // keep most edges
+      if (inside > 0.85) pKeep *= 0.05;  // almost no interior
       if (rng() > pKeep) continue;
 
       const minD = (edgeBias > 0.35) ? minDistEdge : minDistCore;
@@ -299,8 +294,8 @@
         y: y + pad,
         r0: radius(rng, edgeBias > 0.35),
         ph: rng()*Math.PI*2,
-        pulse: 0.010 + rng()*0.018, // tiny breathing
-        blob: 2 + (rng()<0.45 ? 1 : 0) // 2~3 sub-circles
+        pulse: 0.010 + rng()*0.018,
+        blob: 2 + (rng()<0.45 ? 1 : 0)
       });
 
       grid[gridIndex(x,y)] = id;
@@ -327,7 +322,6 @@
     const tt = t*0.001;
     for(const p of pts){
       const rr = p.r0 * (1 + Math.sin(tt*0.55 + p.ph) * p.pulse);
-      // stable: no position shake
       drawBlob(ctx, p.x, p.y, rr, p.ph, p.blob);
     }
   }
@@ -409,7 +403,7 @@
       if(sp.dataset.hit!=="1") continue;
       if(isHit(sp, lensInfo)){
         const obj=ensureInfected(sp);
-        sp.classList.add("hideInk");     // hide original word (cover the spot)
+        sp.classList.add("hideInk");
         obj.canvas.classList.add("on");
       }
     }
@@ -422,7 +416,6 @@
       const cx = r.left + r.width/2;
       const cy = r.top  + r.height/2;
 
-      // readable size (not too huge, but strong)
       const scale = 1.08 + 0.08*obj.prog;
 
       const w = Math.max(320, r.width  * (scale * 1.85));
