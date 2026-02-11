@@ -3,17 +3,15 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation Lens — Readable Viral Type</title>
+  <title>Appropriation — Viral Lens Infection</title>
   <style>
     :root{
       --bg:#ffffff;
       --ink:#111;
-      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
       --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
 
-      /* Lens */
-      --lensSize: 520px;     /* 렌즈 크기 */
-      --magnify: 1.32;       /* 확대 배율 */
+      --lensSize: 520px;
+      --fadeSeconds: 22; /* 감염 → 블랙 전환 총 시간(초) */
     }
 
     *{ box-sizing:border-box; }
@@ -23,9 +21,10 @@
       background: var(--bg);
       color: var(--ink);
       overflow:hidden;
+      transition: background 600ms linear;
     }
 
-    /* Stage */
+    /* Stage & sentence */
     .stage{
       position:fixed;
       inset:0;
@@ -34,8 +33,7 @@
       padding: 28px;
     }
 
-    /* Base sentence */
-    .sentence{
+    #sentence{
       width: min(1200px, 92vw);
       text-align:center;
       font-family: var(--sans);
@@ -45,39 +43,74 @@
       letter-spacing: -0.02em;
       user-select:none;
       position:relative;
-      z-index: 1;
+      z-index: 2;
     }
 
-    /* token keeps spacing correct */
     .w{
       display:inline-block;
       position:relative;
       padding: 0 .06em;
-      white-space: pre; /* keep spaces if any */
     }
 
-    /* Lens wrapper */
+    /* Black fade overlay */
+    #blackout{
+      position:fixed;
+      inset:0;
+      background:#000;
+      opacity:0;
+      pointer-events:none;
+      z-index: 5;
+      transition: opacity 300ms linear;
+    }
+
+    /* Viral overlay canvases */
+    #overlay{
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      z-index: 6;
+    }
+
+    canvas.viral{
+      position:absolute;
+      left:0; top:0;
+      transform: translate(-50%,-55%);
+      filter: drop-shadow(0 18px 34px rgba(0,0,0,.16));
+      will-change: transform, opacity;
+      opacity:0;
+      transition: opacity 180ms linear;
+    }
+    canvas.viral.on{ opacity:1; }
+
+    /* Hide only the original target words when replaced (but keep spacing) */
+    .w.hideInk{
+      color: transparent;
+    }
+
+    /* Final state: hide entire sentence but keep layout (we will show only viral words) */
+    body.final #sentence{
+      opacity:0;
+      transition: opacity 600ms ease;
+    }
+
+    /* Lens */
     #lens{
       position:fixed;
       width: var(--lensSize);
       height: var(--lensSize);
       border-radius: 999px;
-      left: 70%;
+      left: 72%;
       top: 44%;
       transform: translate(-50%,-50%);
-      z-index: 50;
+      z-index: 10;
       pointer-events:auto;
       touch-action:none;
     }
-
-    /* The glass */
     #lens .glass{
       position:absolute;
       inset:0;
       border-radius: 999px;
       overflow:hidden;
-
-      /* glass edge + depth */
       box-shadow:
         0 24px 70px rgba(0,0,0,.18),
         0 0 0 2px rgba(0,0,0,.18),
@@ -85,8 +118,6 @@
         0 -18px 34px rgba(0,0,0,.10) inset;
       background: rgba(255,255,255,.02);
     }
-
-    /* Highlight / glare */
     #lens .glass::before{
       content:"";
       position:absolute;
@@ -99,8 +130,6 @@
       mix-blend-mode: screen;
       pointer-events:none;
     }
-
-    /* inner rim line */
     #lens .glass::after{
       content:"";
       position:absolute;
@@ -111,46 +140,6 @@
         0 0 0 18px rgba(255,255,255,.08) inset;
       pointer-events:none;
     }
-
-    /* magnified view (cloned sentence) */
-    #lensView{
-      position:absolute;
-      left:0; top:0;
-      width:100%;
-      height:100%;
-      transform: scale(var(--magnify));
-      transform-origin: 0 0;
-      will-change: transform;
-      pointer-events:none;
-    }
-
-    /* The cloned sentence inside lens */
-    .sentence.clone{
-      width: min(1200px, 92vw);
-      position:absolute;
-      left:0;
-      top:0;
-      transform: translate(var(--cloneX,0px), var(--cloneY,0px));
-      transform-origin: 0 0;
-      z-index: 1;
-    }
-
-    /* Hide original words inside clone when replaced */
-    .w.mutated{
-      color: transparent;
-    }
-
-    /* Canvas for viral readable type */
-    canvas.viral{
-      position:absolute;
-      left: 50%;
-      top: 50%;
-      transform: translate(-50%,-55%);
-      pointer-events:none;
-      filter: drop-shadow(0 18px 34px rgba(0,0,0,.12));
-    }
-
-    /* little handle dot just for “tool” feeling */
     #lensHandle{
       position:absolute;
       width:46px; height:46px;
@@ -172,12 +161,11 @@
       box-shadow: 0 0 0 7px rgba(0,0,0,.06);
     }
 
-    /* instruction small */
     .hint{
       position:fixed;
       left: 16px;
       bottom: 16px;
-      z-index: 100;
+      z-index: 20;
       font-family: var(--sans);
       font-size: 12px;
       opacity: .65;
@@ -188,292 +176,336 @@
       backdrop-filter: blur(4px);
       user-select:none;
     }
+    body.final .hint{ display:none; }
   </style>
 </head>
 <body>
   <div class="stage">
-    <div id="baseSentence" class="sentence" aria-label="Original sentence"></div>
+    <div id="sentence" aria-label="Original sentence"></div>
   </div>
 
-  <div id="lens" aria-label="Magnifier lens">
-    <div class="glass">
-      <div id="lensView">
-        <div id="cloneSentence" class="sentence clone" aria-hidden="true"></div>
-      </div>
-      <div id="lensHandle" aria-hidden="true"></div>
-    </div>
+  <div id="blackout" aria-hidden="true"></div>
+  <div id="overlay" aria-hidden="true"></div>
+
+  <div id="lens" aria-label="Lens">
+    <div class="glass"></div>
+    <div id="lensHandle" aria-hidden="true"></div>
   </div>
 
-  <div class="hint">Drag the lens. Inside the lens: beauty→VALUATION, merchandise→COMMODITY, making→OPTIMIZING</div>
+  <div class="hint">Drag the lens over: beauty / merchandise / making</div>
 
-  <script>
-    // ---------- CONFIG ----------
-    const TEXT = "Then they discovered the beauty of merchandise and started making it relentlessly.";
+<script>
+(() => {
+  // ---------- TEXT & MAP ----------
+  const TEXT = "Then they discovered the beauty of merchandise and started making it relentlessly.";
 
-    // “더 정교한” 치환(전유) 버전
-    const MAP = [
-      { re: /^beauty$/i,      out: "VALUATION" },
-      { re: /^merchandise$/i, out: "COMMODITY" },
-      { re: /^making$/i,      out: "OPTIMIZING" },
-    ];
+  // “정교한 전유” 버전
+  const TARGETS = [
+    { re: /^beauty$/i, out: "VALUATION" },
+    { re: /^merchandise$/i, out: "COMMODITY" },
+    { re: /^making$/i, out: "OPTIMIZING" },
+  ];
 
-    // Viral style controls (readability-first)
-    const VIRAL = {
-      dotColor: "#111",
-      faintFillAlpha: 0.22,     // 바탕 글자 (희미) — 읽힘 보장
-      outlineAlpha: 0.55,       // 얇은 윤곽 — 읽힘 보장
-      dotStep: 3,               // 낮을수록 촘촘
-      dotRadiusMin: 1.2,
-      dotRadiusMax: 2.6,
-      keepProb: 0.92,           // 높을수록 글자 형태 선명
-      jitter: 0.9,
-      fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-      weight: 900
-    };
+  // ---------- DOM ----------
+  const sentence = document.getElementById("sentence");
+  const overlay  = document.getElementById("overlay");
+  const lens     = document.getElementById("lens");
+  const blackout = document.getElementById("blackout");
 
-    // ---------- HELPERS ----------
-    function tokenizeKeepPunct(text){
-      // split into words & punctuation but keep spaces in rendering as separate nodes
-      // We'll split by space, keep punctuation attached to words if any.
-      return text.split(" ");
-    }
-    function lookup(word){
-      const clean = word.replace(/[^\w']/g, ""); // remove punctuation for matching
-      for (const m of MAP){
-        if (m.re.test(clean)) return { clean, out: m.out };
-      }
-      return null;
-    }
-    function makeSpan(word){
+  // ---------- HELPERS ----------
+  function cleanWord(w){ return w.replace(/[^\w']/g, ""); }
+  function findTarget(word){
+    const c = cleanWord(word);
+    for (const t of TARGETS) if (t.re.test(c)) return { key: c.toLowerCase(), out: t.out };
+    return null;
+  }
+
+  // Render with correct spacing (띄어쓰기 절대 안 깨짐)
+  function renderSentence(){
+    sentence.textContent = "";
+    const words = TEXT.split(" ");
+    words.forEach((w, i) => {
       const sp = document.createElement("span");
       sp.className = "w";
-      sp.textContent = word;   // keep punctuation as shown
-      sp.dataset.word = word;
-      return sp;
-    }
-
-    // ---------- RENDER BASE + CLONE ----------
-    const base = document.getElementById("baseSentence");
-    const clone = document.getElementById("cloneSentence");
-
-    function renderSentence(container, isClone){
-      container.textContent = "";
-      const words = tokenizeKeepPunct(TEXT);
-
-      words.forEach((w, i) => {
-        const sp = makeSpan(w);
-        container.appendChild(sp);
-
-        // ✅ 띄어쓰기 정확히 유지: 단어 뒤에 " " 텍스트 노드를 따로 붙임
-        if (i !== words.length - 1){
-          container.appendChild(document.createTextNode(" "));
-        }
-
-        if (isClone){
-          const hit = lookup(w);
-          if (hit){
-            sp.dataset.mapped = hit.out;
-          }
-        }
-      });
-    }
-
-    renderSentence(base, false);
-    renderSentence(clone, true);
-
-    // ---------- VIRAL TEXT CANVAS (READABLE DOT-LETTER) ----------
-    function hashStr(s){
-      let h = 2166136261;
-      for (let i=0;i<s.length;i++){
-        h ^= s.charCodeAt(i);
-        h = Math.imul(h, 16777619);
+      sp.textContent = w;
+      const hit = findTarget(w);
+      if (hit){
+        sp.dataset.hit = "1";
+        sp.dataset.key = hit.key;
+        sp.dataset.out = hit.out;
       }
-      return h >>> 0;
+      sentence.appendChild(sp);
+      if (i !== words.length - 1) sentence.appendChild(document.createTextNode(" "));
+    });
+  }
+  renderSentence();
+
+  // ---------- VIRAL TYPE DRAW (더 “바이러스”처럼, 그런데 읽힘 유지) ----------
+  function hashStr(s){
+    let h = 2166136261;
+    for (let i=0;i<s.length;i++){
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+
+  function drawViral(canvas, text, w, h, opts){
+    const dpr = Math.max(1, window.devicePixelRatio || 1);
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+    canvas.style.width = w + "px";
+    canvas.style.height = h + "px";
+
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.clearRect(0,0,w,h);
+
+    const fontSize = Math.max(24, Math.min(140, Math.floor(h * 0.62)));
+    const font = `${opts.weight} ${fontSize}px ${opts.fontFamily}`;
+
+    // A) 아주 희미한 바탕 글자(읽힘 확보)
+    ctx.font = font;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = `rgba(255,255,255,${opts.baseAlpha})`; // 최종 흰색 대비용: 흰색 바탕에서 거의 안보이게 baseAlpha 조절
+    ctx.fillText(text, w/2, h/2);
+
+    // B) 마스크 텍스트
+    const mask = document.createElement("canvas");
+    mask.width = Math.floor(w * dpr);
+    mask.height = Math.floor(h * dpr);
+    const m = mask.getContext("2d");
+    m.setTransform(dpr,0,0,dpr,0,0);
+    m.clearRect(0,0,w,h);
+    m.font = font;
+    m.textAlign = "center";
+    m.textBaseline = "middle";
+    m.fillStyle = "#000";
+    m.fillText(text, w/2, h/2);
+
+    const img = m.getImageData(0,0,mask.width,mask.height).data;
+
+    // Seeded RNG + time wobble
+    let seed = (hashStr(opts.seedKey) + ((opts.t*1000)|0)) >>> 0;
+    function rand(){
+      seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+      return (seed >>> 0) / 4294967295;
     }
 
-    function drawViral(canvas, text, w, h, seedKey){
-      const dpr = Math.max(1, window.devicePixelRatio || 1);
-      canvas.width = Math.floor(w * dpr);
-      canvas.height = Math.floor(h * dpr);
-      canvas.style.width = w + "px";
-      canvas.style.height = h + "px";
+    // C) 도트 덩어리 (레퍼런스처럼 “뭉친” 형태)
+    ctx.fillStyle = opts.dotColor;
 
-      const ctx = canvas.getContext("2d");
-      ctx.setTransform(dpr,0,0,dpr,0,0);
-      ctx.clearRect(0,0,w,h);
+    // 움직임(살아있는 느낌): 시간에 따라 약간 흐르는 오프셋
+    const flowX = Math.sin(opts.t * 0.7) * 1.2;
+    const flowY = Math.cos(opts.t * 0.6) * 1.2;
 
-      // 1) base faint fill (ensures readability)
-      const fontSize = Math.max(24, Math.min(120, Math.floor(h * 0.62)));
-      ctx.font = `${VIRAL.weight} ${fontSize}px ${VIRAL.fontFamily}`;
-      ctx.textBaseline = "middle";
-      ctx.textAlign = "center";
-
-      ctx.fillStyle = `rgba(0,0,0,${VIRAL.faintFillAlpha})`;
-      ctx.fillText(text, w/2, h/2);
-
-      // 2) outline (more readable)
-      ctx.lineWidth = Math.max(1, fontSize * 0.06);
-      ctx.strokeStyle = `rgba(0,0,0,${VIRAL.outlineAlpha})`;
-      ctx.strokeText(text, w/2, h/2);
-
-      // 3) dot mask from text alpha (virus texture)
-      const mask = document.createElement("canvas");
-      mask.width = Math.floor(w * dpr);
-      mask.height = Math.floor(h * dpr);
-      const m = mask.getContext("2d");
-      m.setTransform(dpr,0,0,dpr,0,0);
-      m.clearRect(0,0,w,h);
-
-      m.fillStyle = "#000";
-      m.font = `${VIRAL.weight} ${fontSize}px ${VIRAL.fontFamily}`;
-      m.textBaseline = "middle";
-      m.textAlign = "center";
-      m.fillText(text, w/2, h/2);
-
-      const img = m.getImageData(0,0,mask.width,mask.height).data;
-
-      let seed = hashStr(seedKey) >>> 0;
-      function rand(){
-        seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
-        return (seed >>> 0) / 4294967295;
-      }
-
-      ctx.fillStyle = VIRAL.dotColor;
-      const step = VIRAL.dotStep;
-
-      for (let yy=0; yy<h; yy+=step){
-        for (let xx=0; xx<w; xx+=step){
-          const px = Math.floor(xx * dpr);
-          const py = Math.floor(yy * dpr);
-          const idx = (py * mask.width + px) * 4;
-          const a = img[idx+3];
-          if (a > 14){
-            // more alpha -> more likely to keep (sharper letter shape)
-            const localProb = VIRAL.keepProb * (a/255);
-            if (rand() < localProb){
-              const r = VIRAL.dotRadiusMin + (VIRAL.dotRadiusMax - VIRAL.dotRadiusMin) * rand();
-              const jx = (rand()*2-1) * VIRAL.jitter;
-              const jy = (rand()*2-1) * VIRAL.jitter;
-              ctx.beginPath();
-              ctx.arc(xx + jx, yy + jy, r, 0, Math.PI*2);
-              ctx.fill();
-            }
+    for (let yy=0; yy<h; yy+=opts.step){
+      for (let xx=0; xx<w; xx+=opts.step){
+        const px = Math.floor(xx * dpr);
+        const py = Math.floor(yy * dpr);
+        const idx = (py * mask.width + px) * 4;
+        const a = img[idx+3];
+        if (a > 18){
+          // 알파가 높은 중심부에 더 많이 찍어서 형태가 “글자”로 보이게
+          const localProb = opts.keepProb * (a/255);
+          if (rand() < localProb){
+            // “덩어리” 느낌: 반지름을 조금 키우고 중첩
+            const rr = opts.rMin + (opts.rMax - opts.rMin) * rand();
+            const jx = (rand()*2-1) * opts.jitter + flowX;
+            const jy = (rand()*2-1) * opts.jitter + flowY;
+            ctx.beginPath();
+            ctx.arc(xx + jx, yy + jy, rr, 0, Math.PI*2);
+            ctx.fill();
           }
         }
       }
     }
 
-    // ---------- APPLY MUTATION INSIDE CLONE ----------
-    const canvasCache = new Map(); // span -> canvas
-    function applyMutations(){
-      const spans = clone.querySelectorAll(".w");
-      spans.forEach(sp => {
-        const out = sp.dataset.mapped;
-        if (!out) return;
+    // D) 얇은 윤곽(읽힘 강화, 레퍼런스처럼 딱딱한 느낌)
+    ctx.font = font;
+    ctx.lineWidth = Math.max(1, fontSize * 0.05);
+    ctx.strokeStyle = `rgba(255,255,255,${opts.outlineAlpha})`;
+    ctx.strokeText(text, w/2, h/2);
+  }
 
-        // hide original word in clone
-        sp.classList.add("mutated");
+  // ---------- STATE ----------
+  const spans = Array.from(sentence.querySelectorAll(".w"));
+  const infected = new Map(); // key -> { span, out, prog(0..1), canvas, startedAt }
+  let infectionStart = null;  // first time any target is found
+  let globalProg = 0;         // 0..1
 
-        // add / reuse canvas
-        let c = canvasCache.get(sp);
-        if (!c){
-          c = document.createElement("canvas");
-          c.className = "viral";
-          sp.appendChild(c);
-          canvasCache.set(sp, c);
-        }
+  function ensureInfected(span){
+    const key = span.dataset.key;
+    if (infected.has(key)) return infected.get(key);
 
-        // size based on span box (make it BIG like “found”)
-        const r = sp.getBoundingClientRect();
-        // scale multiplier per word (PRODUCT tends to look great bigger)
-        const wordClean = sp.textContent.replace(/[^\w']/g,"").toLowerCase();
-        let mult = 3.0;
-        if (wordClean === "merchandise") mult = 3.6;
-        if (wordClean === "beauty") mult = 3.2;
-        if (wordClean === "making") mult = 3.4;
+    const out = span.dataset.out;
+    const canvas = document.createElement("canvas");
+    canvas.className = "viral";
+    overlay.appendChild(canvas);
 
-        const w = Math.max(180, r.width * mult);
-        const h = Math.max(78,  r.height * (mult * 0.78));
+    const obj = {
+      key, out, span, canvas,
+      prog: 0,
+      startedAt: performance.now()
+    };
+    infected.set(key, obj);
 
-        drawViral(c, out, Math.round(w), Math.round(h), out + ":" + w + "x" + h);
-      });
+    // 첫 감염 시작 시각
+    if (!infectionStart) infectionStart = performance.now();
+    return obj;
+  }
+
+  // ---------- LENS HIT TEST ----------
+  function lensCenter(){
+    const r = lens.getBoundingClientRect();
+    return { cx: r.left + r.width/2, cy: r.top + r.height/2, rad: r.width/2 };
+  }
+
+  function isHit(span, lensInfo){
+    const r = span.getBoundingClientRect();
+    const wx = r.left + r.width/2;
+    const wy = r.top + r.height/2;
+    return ((wx - lensInfo.cx)**2 + (wy - lensInfo.cy)**2) <= (lensInfo.rad**2);
+  }
+
+  // ---------- DRAG LENS ----------
+  let dragging = false;
+  let offX = 0, offY = 0;
+
+  function setLensPos(x,y){
+    const size = lens.getBoundingClientRect().width;
+    const nx = Math.max(size*0.15, Math.min(window.innerWidth - size*0.15, x));
+    const ny = Math.max(size*0.15, Math.min(window.innerHeight - size*0.15, y));
+    lens.style.left = nx + "px";
+    lens.style.top  = ny + "px";
+  }
+
+  lens.addEventListener("pointerdown", (e) => {
+    dragging = true;
+    const r = lens.getBoundingClientRect();
+    offX = e.clientX - (r.left + r.width/2);
+    offY = e.clientY - (r.top  + r.height/2);
+    lens.setPointerCapture(e.pointerId);
+  });
+  lens.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    setLensPos(e.clientX - offX, e.clientY - offY);
+  });
+  lens.addEventListener("pointerup", (e) => {
+    dragging = false;
+    try { lens.releasePointerCapture(e.pointerId); } catch {}
+  });
+
+  // initial lens position
+  setLensPos(window.innerWidth*0.74, window.innerHeight*0.44);
+
+  // ---------- ANIMATION LOOP ----------
+  function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+  function tick(t){
+    const now = performance.now();
+    const lensInfo = lensCenter();
+
+    // 1) 발견(렌즈가 단어 위에 닿으면 감염 시작)
+    for (const sp of spans){
+      if (sp.dataset.hit !== "1") continue;
+      if (isHit(sp, lensInfo)){
+        const obj = ensureInfected(sp);
+        // 감염 시작 즉시 원 단어는 가리고(해당 단어만) 바이러스 단어가 “확대”되어 등장
+        sp.classList.add("hideInk");
+        obj.canvas.classList.add("on");
+      }
     }
 
-    // ---------- REAL MAGNIFIER EFFECT ----------
-    const lens = document.getElementById("lens");
-    const lensView = document.getElementById("lensView");
+    // 2) 개별 단어 감염 진행 + “바이러스 확대/증식” 연출
+    for (const obj of infected.values()){
+      // prog는 천천히 상승
+      const dt = (now - obj.startedAt) / 9000; // 단어 1개가 꽉 차는 속도(약 9초)
+      obj.prog = clamp01(Math.max(obj.prog, dt));
 
-    let dragging = false;
-    let offX = 0, offY = 0;
+      const r = obj.span.getBoundingClientRect();
 
-    function setLensPos(clientX, clientY){
-      const size = lens.getBoundingClientRect().width;
-      const x = Math.max(size*0.15, Math.min(window.innerWidth - size*0.15, clientX));
-      const y = Math.max(size*0.15, Math.min(window.innerHeight - size*0.15, clientY));
-      lens.style.left = x + "px";
-      lens.style.top = y + "px";
+      // “해당 단어만” 크게: progress가 올라갈수록 점점 더 커지게
+      const baseScale = 2.6; // 처음부터 크게
+      const grow = 2.2;      // 더 커지는 폭
+      const scale = baseScale + grow * obj.prog;
 
-      // move clone so that lens shows correct area, then magnify
-      // We want clone to be aligned with base sentence in world coords.
-      const baseRect = base.getBoundingClientRect();
-      const lensRect = lens.getBoundingClientRect();
+      // 캔버스 크기 (레퍼런스처럼 덩어리 글자)
+      const w = Math.max(240, r.width * scale);
+      const h = Math.max(110, r.height * (scale * 0.78));
 
-      // Position clone container: translate so its top-left matches base top-left
-      // But inside lensView (scaled), we shift by negative lens center to simulate magnification.
-      const scale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--magnify")) || 1.3;
+      // 위치: 단어 중심
+      const cx = r.left + r.width/2;
+      const cy = r.top  + r.height/2;
 
-      // lensView origin is lens top-left. We want clone text to appear as if it's “zoomed into” what’s under the lens.
-      // So: clone is shifted by (baseLeft - lensLeft, baseTop - lensTop) then additionally by zoom compensation.
-      const dx = (baseRect.left - lensRect.left);
-      const dy = (baseRect.top  - lensRect.top);
+      obj.canvas.style.left = cx + "px";
+      obj.canvas.style.top  = cy + "px";
 
-      // When scaling up, we need to counter-shift so the center stays stable:
-      const cx = lensRect.width/2;
-      const cy = lensRect.height/2;
-      const compX = -(cx * (scale - 1));
-      const compY = -(cy * (scale - 1));
+      // 렌즈 안에서 “더 발견”된 느낌: 살짝 흔들리기
+      const wobX = Math.sin(t*0.001 + (obj.key.length*2)) * (2 + 3*obj.prog);
+      const wobY = Math.cos(t*0.0012 + (obj.key.length*3)) * (2 + 3*obj.prog);
+      obj.canvas.style.transform = `translate(-50%,-55%) translate(${wobX}px,${wobY}px)`;
 
-      clone.style.setProperty("--cloneX", (dx + compX) + "px");
-      clone.style.setProperty("--cloneY", (dy + compY) + "px");
+      // 감염 진행에 따라: 더 뭉치고 더 “바이러스”처럼
+      const opts = {
+        t: t*0.001,
+        seedKey: obj.key + ":" + obj.out + ":" + (obj.prog*100).toFixed(1),
+        dotColor: (document.body.classList.contains("final") ? "#fff" : "#111"),
+        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+        weight: 900,
+
+        // 레퍼런스처럼 “덩어리”로 보이게 (progress↑ 할수록 더 촘촘/굵게)
+        step: Math.max(2, 3 - Math.floor(obj.prog*1.2)),   // 3 → 2
+        rMin: 1.2 + obj.prog*0.4,
+        rMax: 2.6 + obj.prog*1.4,
+        keepProb: 0.86 + obj.prog*0.10,                    // 중심부 유지 ↑
+        jitter: 1.2 + obj.prog*0.8,
+
+        // 읽힘 유지용(초반엔 거의 안 보이게, 후반엔 대비 강화)
+        baseAlpha: document.body.classList.contains("final") ? 0.00 : 0.08,
+        outlineAlpha: document.body.classList.contains("final") ? 0.85 : (0.35 + obj.prog*0.25)
+      };
+
+      drawViral(obj.canvas, obj.out, Math.round(w), Math.round(h), opts);
     }
 
-    lens.addEventListener("pointerdown", (e) => {
-      dragging = true;
-      const r = lens.getBoundingClientRect();
-      offX = e.clientX - (r.left + r.width/2);
-      offY = e.clientY - (r.top  + r.height/2);
-      lens.setPointerCapture(e.pointerId);
-    });
-    lens.addEventListener("pointermove", (e) => {
-      if (!dragging) return;
-      setLensPos(e.clientX - offX, e.clientY - offY);
-    });
-    lens.addEventListener("pointerup", (e) => {
-      dragging = false;
-      try { lens.releasePointerCapture(e.pointerId); } catch {}
-    });
+    // 3) 글로벌 감염 → 천천히 화면이 검게
+    if (infectionStart){
+      const seconds = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--fadeSeconds")) || 22;
+      globalProg = clamp01((now - infectionStart) / (seconds * 1000));
 
-    // start position
-    setLensPos(window.innerWidth*0.72, window.innerHeight*0.44);
+      // 중간엔 조금 느리게, 후반 가속 (감염의 inevitability)
+      const eased = globalProg < 0.7
+        ? (globalProg * 0.7)
+        : (0.49 + (globalProg-0.7) / 0.3 * 0.51);
 
-    // Recompute when layout changes
-    function relayout(){
-      // Must render viral after fonts/layout settle
-      applyMutations();
-      const r = lens.getBoundingClientRect();
-      setLensPos(r.left + r.width/2, r.top + r.height/2);
+      blackout.style.opacity = String(eased);
+
+      // 4) 마지막: 블랙 + 변이 단어만 흰색으로 남기기
+      if (globalProg >= 0.995 && !document.body.classList.contains("final")){
+        document.body.classList.add("final");
+        // 배경 확실히 검정
+        blackout.style.opacity = "1";
+        // 렌즈 제거
+        lens.style.display = "none";
+
+        // 바이러스 단어를 흰색으로 다시 그리도록 다음 프레임에서 반영됨
+        // (그리고 원문 전체는 서서히 사라짐)
+      }
     }
 
-    window.addEventListener("resize", relayout);
-    window.addEventListener("load", relayout);
+    requestAnimationFrame(tick);
+  }
 
-    // First layout pass (after a frame so rects are correct)
-    requestAnimationFrame(() => {
-      applyMutations();
-      // move lens once to align clone
-      const r = lens.getBoundingClientRect();
-      setLensPos(r.left + r.width/2, r.top + r.height/2);
-    });
-  </script>
+  requestAnimationFrame(tick);
+
+  // On resize keep lens reasonable
+  window.addEventListener("resize", () => {
+    const r = lens.getBoundingClientRect();
+    setLensPos(r.left + r.width/2, r.top + r.height/2);
+  });
+})();
+</script>
 </body>
 </html>
