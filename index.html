@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Appropriation — Viral Lens (Goo + Readable Text)</title>
+  <title>Appropriation — Viral Lens (Soft Infected Reveal)</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -13,10 +13,10 @@
       --lensSize: 200px;
       --fadeSeconds: 6.5;
 
-      /* ✅ goo tuned to be “texture”, not “shape” */
-      --blurPx: 4;        /* smaller blur = less melty */
-      --thresh: 205;      /* higher = less merging */
-      --front: 0.04;      /* thinner front swell */
+      /* ✅ goo as texture (readable + alive) */
+      --blurPx: 4.6;      /* 4~5.5 */
+      --thresh: 214;      /* 205~230 */
+      --front: 0.045;     /* infection front thickness */
     }
     *{ box-sizing:border-box; }
     html,body{ height:100%; }
@@ -85,7 +85,7 @@
       touch-action:none;
     }
 
-    /* lens */
+    /* lens glass */
     #lens .glass{
       position:absolute;
       inset:0;
@@ -182,7 +182,7 @@
     return null;
   }
 
-  // sentence
+  // sentence build
   sentence.textContent = "";
   const words = TEXT.split(" ");
   words.forEach((w,i)=>{
@@ -190,7 +190,6 @@
     sp.className="w";
     sp.textContent=w;
 
-    // micro motion params
     const dur = 6.2 + Math.random()*4.2;
     const delay = -(Math.random()*6.0);
     const mx = (Math.random()*1.4 - 0.70);
@@ -274,7 +273,6 @@
     ctx.setTransform(dpr,0,0,dpr,0,0);
     ctx.clearRect(0,0,w,h);
 
-    // draw text into this local canvas (for sampling)
     ctx.font = font;
     ctx.textAlign="left";
     ctx.textBaseline="alphabetic";
@@ -286,7 +284,6 @@
 
     const img = ctx.getImageData(0,0,c.width,c.height).data;
 
-    // particles
     const pts = [];
     const samplingDensity = 4;
     for(let yy=0; yy<h; yy+=samplingDensity){
@@ -301,7 +298,7 @@
           pts.push({
             x: xx + jitterX,
             y: yy + jitterY,
-            r0: 0.95 + rng()*0.65,   // ✅ much smaller = goo is texture
+            r0: 0.95 + rng()*0.65,  // ✅ texture blobs
             ph: rng()*Math.PI*2,
             ax: 0.22 + rng()*0.18,
             ay: 0.20 + rng()*0.16,
@@ -324,24 +321,24 @@
       p.d = d + (rng()-0.5)*6.0;
     }
     pts.sort((a,b)=>a.d-b.d);
-    for(let i=0;i<pts.length;i++){
-      pts[i].rank = i/(pts.length-1);
-    }
+    for(let i=0;i<pts.length;i++) pts[i].rank = i/(pts.length-1);
 
-    // return everything needed to render *actual* readable text on top
     return { pts, w, h, font, text, textX: x, textY: y };
   }
 
-  // Goo render: circles -> blur -> threshold -> tint (below) + readable fillText (above)
+  // Soft infected reveal:
+  // 1) build goo mask (blur+threshold) from particles
+  // 2) tint goo UNDER
+  // 3) draw TEXT into buffer, then mask text by goo mask (destination-in) => “infected reveal”
+  // 4) add a subtle blurred echo behind + micro grain
   function gooRender(mainCtx, obj, t, color){
     const tt = t*0.001;
     const prog = obj.prog;
 
-    const blurPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--blurPx")) || 4;
-    const thresh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--thresh")) || 205;
-    const front  = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--front")) || 0.04;
+    const blurPx = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--blurPx")) || 4.6;
+    const thresh = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--thresh")) || 214;
+    const front  = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--front")) || 0.045;
 
-    const off = obj.off;
     const offCtx = obj.offCtx;
     const ow = obj.offW, oh = obj.offH;
 
@@ -351,7 +348,7 @@
     const dx = Math.floor((ow - obj.data.w)/2);
     const dy = Math.floor((oh - obj.data.h)/2);
 
-    // 1) draw mask circles
+    // 1) draw particle mask (black)
     offCtx.save();
     offCtx.translate(dx, dy);
 
@@ -373,7 +370,7 @@
       offCtx.fill();
     }
 
-    // 2) spores (very subtle + low alpha so it won’t destroy letters)
+    // subtle spores (kept very low so it stays readable)
     if(!obj.spores){
       const rng = makeRng(hashStr(obj.key + "::spores"));
       obj.spores = [];
@@ -394,7 +391,7 @@
     const spStrength = Math.max(0, Math.min(1, (prog - 0.22) / 0.65));
     if(spStrength > 0){
       offCtx.save();
-      offCtx.globalAlpha = 0.35 * spStrength; // ✅ low impact
+      offCtx.globalAlpha = 0.30 * spStrength;
       for(const s of obj.spores){
         const drift = 0.6 + spStrength*1.3;
         const jx = Math.cos(tt*1.8*s.spd + s.ph) * drift;
@@ -409,15 +406,15 @@
 
     offCtx.restore();
 
-    // 3) blur mask
+    // 2) blur mask into blur canvas
     const bctx = obj.blurCtx;
     bctx.setTransform(1,0,0,1,0,0);
     bctx.clearRect(0,0,ow,oh);
     bctx.filter = `blur(${blurPx}px)`;
-    bctx.drawImage(off, 0, 0);
+    bctx.drawImage(obj.off, 0, 0);
     bctx.filter = "none";
 
-    // 4) threshold alpha (tight band)
+    // 3) threshold alpha (tight band => defined but soft)
     const img = bctx.getImageData(0,0,ow,oh);
     const d = img.data;
 
@@ -436,7 +433,7 @@
     }
     bctx.putImageData(img,0,0);
 
-    // 5) tint goo
+    // 4) tint goo (UNDER)
     offCtx.setTransform(1,0,0,1,0,0);
     offCtx.clearRect(0,0,ow,oh);
     offCtx.fillStyle = color;
@@ -445,31 +442,69 @@
     offCtx.drawImage(obj.blur,0,0);
     offCtx.globalCompositeOperation = "source-over";
 
-    // draw goo under
-    mainCtx.drawImage(off, 0, 0);
+    // paint goo under
+    mainCtx.drawImage(obj.off, 0, 0);
 
-    // 6) ✅ readable text on top (this is what fixes legibility)
-    const textAlpha = Math.max(0, Math.min(1, (prog - 0.12) / 0.55));
-    if(textAlpha > 0){
+    // 5) TEXT reveal: text masked by goo (soft infected reveal)
+    const textProg = Math.max(0, Math.min(1, (prog - 0.10) / 0.70));
+    if(textProg > 0){
+      const tctx = obj.textCtx;
+
+      // draw text into text buffer
+      tctx.setTransform(1,0,0,1,0,0);
+      tctx.clearRect(0,0,ow,oh);
+      tctx.fillStyle = color;
+      tctx.font = obj.data.font;
+      tctx.textAlign = "left";
+      tctx.textBaseline = "alphabetic";
+
+      // subtle living wobble (keeps feel organic, shape intact)
+      const wob = 0.45 * (1 - textProg) * Math.sin(tt*9.0);
+      tctx.save();
+      tctx.translate(dx + wob, dy);
+      tctx.fillText(obj.data.text, obj.data.textX, obj.data.textY);
+      tctx.restore();
+
+      // mask text by goo alpha
+      tctx.globalCompositeOperation = "destination-in";
+      tctx.globalAlpha = 0.95;
+      tctx.drawImage(obj.blur, 0, 0);
+      tctx.globalCompositeOperation = "source-over";
+      tctx.globalAlpha = 1;
+
+      // draw masked text (slightly eased)
       mainCtx.save();
-      mainCtx.globalAlpha = 0.92 * textAlpha;
-      mainCtx.fillStyle = color;
-      mainCtx.font = obj.data.font;
-      mainCtx.textAlign = "left";
-      mainCtx.textBaseline = "alphabetic";
+      mainCtx.globalAlpha = 0.94 * textProg;
+      mainCtx.drawImage(obj.textCan, 0, 0);
+      mainCtx.restore();
 
-      // subtle “organic” shimmer WITHOUT losing shape
-      const shimmer = 0.35 * (1 - textAlpha) * Math.sin(tt*10.0);
-      mainCtx.translate(dx + shimmer, dy);
+      // faint blurred echo behind (softens “hard print”)
+      mainCtx.save();
+      mainCtx.globalAlpha = 0.18 * textProg;
+      mainCtx.filter = "blur(1.2px)";
+      mainCtx.drawImage(obj.textCan, 0, 0);
+      mainCtx.filter = "none";
+      mainCtx.restore();
+    }
 
-      mainCtx.fillText(obj.data.text, obj.data.textX, obj.data.textY);
-
-      // tiny “edge fatten” to fight blur perception
-      mainCtx.globalAlpha = 0.25 * textAlpha;
-      mainCtx.lineWidth = 1.0;
-      mainCtx.strokeStyle = color;
-      mainCtx.strokeText(obj.data.text, obj.data.textX, obj.data.textY);
-
+    // 6) micro grain to break flatness (tiny + cheap)
+    // (skip early: only after some reveal)
+    if(prog > 0.22){
+      mainCtx.save();
+      mainCtx.globalAlpha = 0.035;
+      mainCtx.globalCompositeOperation = "overlay";
+      const g = obj.grainImg || (obj.grainImg = mainCtx.createImageData(ow, oh));
+      // refresh grain occasionally (not every frame)
+      if(!obj.grainT || (t - obj.grainT) > 120){
+        obj.grainT = t;
+        const gd = g.data;
+        for(let i=0;i<gd.length;i+=4){
+          const n = (Math.random()*255)|0;
+          gd[i]=n; gd[i+1]=n; gd[i+2]=n; gd[i+3]=255;
+        }
+      }
+      mainCtx.putImageData(g,0,0);
+      mainCtx.globalCompositeOperation = "source-over";
       mainCtx.restore();
     }
   }
@@ -500,11 +535,19 @@
 
       off: document.createElement("canvas"),
       blur: document.createElement("canvas"),
+      textCan: document.createElement("canvas"),
+
       offCtx: null,
       blurCtx: null,
+      textCtx: null,
+
       offW: 0,
       offH: 0,
+
       spores: null,
+
+      grainImg: null,
+      grainT: 0,
     };
     infected.set(key, obj);
     if (!infectionStart) infectionStart = performance.now();
@@ -522,7 +565,7 @@
     return ((wx-lensInfo.cx)**2 + (wy-lensInfo.cy)**2) <= (lensInfo.rad**2);
   }
 
-  // drag lens
+  // lens drag
   let dragging=false, offX=0, offY=0;
   function setLensPos(x,y){
     const size = lens.getBoundingClientRect().width;
@@ -563,11 +606,11 @@
       }
     }
 
-    // render
+    // render infected
     for(const obj of infected.values()){
       obj.prog = clamp01(Math.max(obj.prog, (now-obj.startedAt)/5200));
 
-      // hide original ink once infection begins
+      // hide original word after infection starts
       if(obj.prog > 0.10) obj.span.classList.add("hideInk");
 
       const r = obj.span.getBoundingClientRect();
@@ -593,18 +636,26 @@
         obj.lastTW = tw; obj.lastTH = th;
         obj.data = precomputeParticles_FIT(obj.out, tw, th, obj.key + ":" + obj.out);
         obj.spores = null;
+        obj.grainImg = null;
       }
 
       const main = ensureCanvas(obj.canvas, cw, ch);
       const mainCtx = main.ctx;
       mainCtx.clearRect(0,0,cw,ch);
 
-      if(obj.offW !== cw || obj.offH !== ch || !obj.offCtx || !obj.blurCtx){
+      // offscreen buffers
+      if(obj.offW !== cw || obj.offH !== ch || !obj.offCtx || !obj.blurCtx || !obj.textCtx){
         obj.offW = cw; obj.offH = ch;
-        obj.off.width  = cw; obj.off.height = ch;
+
+        obj.off.width  = cw; obj.off.height  = ch;
         obj.blur.width = cw; obj.blur.height = ch;
+        obj.textCan.width = cw; obj.textCan.height = ch;
+
         obj.offCtx  = obj.off.getContext("2d", { willReadFrequently: true });
         obj.blurCtx = obj.blur.getContext("2d", { willReadFrequently: true });
+        obj.textCtx = obj.textCan.getContext("2d", { willReadFrequently: true });
+
+        obj.grainImg = null;
       }
 
       const isFinal = document.body.classList.contains("final");
