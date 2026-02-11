@@ -9,7 +9,7 @@
       --bg:#ffffff;
       --ink:#111;
       --sans: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      --lensSize: 520px;
+      --lensSize: 200px; /* ✅ size increased to 200 */
       --fadeSeconds: 6.5; /* faster to black */
     }
     *{ box-sizing:border-box; }
@@ -49,42 +49,44 @@
       left:72%; top:44%; transform:translate(-50%,-50%);
       z-index:10; pointer-events:auto; touch-action:none;
     }
+
+    /* ✅ lens: remove stroke ring 느낌, add real glass thickness */
     #lens .glass{
-      position:absolute; inset:0; border-radius:999px; overflow:hidden;
+      position:absolute;
+      inset:0;
+      border-radius:999px;
+      overflow:hidden;
+
+      background: radial-gradient(
+        circle at 35% 30%,
+        rgba(255,255,255,.85) 0%,
+        rgba(255,255,255,.35) 35%,
+        rgba(255,255,255,.12) 55%,
+        rgba(255,255,255,.03) 75%,
+        rgba(255,255,255,.01) 100%
+      );
+
       box-shadow:
-        0 24px 70px rgba(0,0,0,.18),
-        0 0 0 2px rgba(0,0,0,.18),
-        0 0 0 10px rgba(255,255,255,.65) inset,
-        0 -18px 34px rgba(0,0,0,.10) inset;
-      background: rgba(255,255,255,.02);
+        0 30px 80px rgba(0,0,0,.25),            /* outer drop shadow */
+        inset 0 20px 35px rgba(255,255,255,.6), /* top highlight */
+        inset 0 -25px 40px rgba(0,0,0,.18),     /* bottom depth */
+        inset 0 0 40px rgba(0,0,0,.12);         /* inner curvature */
     }
+
+    /* ✅ keep subtle highlight, no stroke ring */
     #lens .glass::before{
-      content:""; position:absolute; inset:-40px;
+      content:""; position:absolute; inset:-50px;
       background:
-        radial-gradient(circle at 30% 22%, rgba(255,255,255,.70), transparent 48%),
-        radial-gradient(circle at 78% 74%, rgba(255,255,255,.25), transparent 58%),
-        linear-gradient(135deg, rgba(255,255,255,.18), transparent 60%);
-      opacity:.55; mix-blend-mode:screen; pointer-events:none;
-    }
-    #lens .glass::after{
-      content:""; position:absolute; inset:14px; border-radius:999px;
-      box-shadow: 0 0 0 1px rgba(0,0,0,.10) inset, 0 0 0 18px rgba(255,255,255,.08) inset;
+        radial-gradient(circle at 28% 20%, rgba(255,255,255,.75), transparent 52%),
+        radial-gradient(circle at 78% 74%, rgba(255,255,255,.22), transparent 60%),
+        linear-gradient(135deg, rgba(255,255,255,.16), transparent 62%);
+      opacity:.55;
+      mix-blend-mode:screen;
       pointer-events:none;
+      filter: blur(0.2px);
     }
-    #lensHandle{
-      position:absolute; width:46px; height:46px; border-radius:999px;
-      right:26px; bottom:26px;
-      background:rgba(255,255,255,.78);
-      border:1px solid rgba(0,0,0,.12);
-      box-shadow:0 12px 30px rgba(0,0,0,.14);
-      display:grid; place-items:center;
-      pointer-events:none;
-    }
-    #lensHandle::before{
-      content:""; width:12px; height:12px; border-radius:999px;
-      background:rgba(0,0,0,.82);
-      box-shadow:0 0 0 7px rgba(0,0,0,.06);
-    }
+
+    /* ✅ removed: .glass::after (inner rings / strokes) */
 
     .hint{
       position:fixed; left:16px; bottom:16px; z-index:20;
@@ -105,7 +107,7 @@
 
   <div id="lens">
     <div class="glass"></div>
-    <div id="lensHandle"></div>
+    <!-- ✅ removed: lensHandle (weird circle) -->
   </div>
 
   <div class="hint">Drag lens over: beauty / merchandise / making</div>
@@ -192,18 +194,8 @@
     const idx = (py*mask.mw + px)*4;
     return mask.img[idx+3];
   }
-  function edgeScore(mask, x, y, iw, ih){
-    const a0 = alphaAt(mask, x, y, iw, ih);
-    const s = 2.4;
-    const a1 = alphaAt(mask, x+s, y,   iw, ih);
-    const a2 = alphaAt(mask, x-s, y,   iw, ih);
-    const a3 = alphaAt(mask, x,   y+s, iw, ih);
-    const a4 = alphaAt(mask, x,   y-s, iw, ih);
-    const dif = (Math.abs(a0-a1)+Math.abs(a0-a2)+Math.abs(a0-a3)+Math.abs(a0-a4)) / (4*255);
-    return dif;
-  }
 
-  // ✅ IMPROVED: More readable particle placement
+  // ✅ Text sampling method - samples pixels from rendered text
   function precomputeParticles_POISSON(text, w, h, seedKey){
     const rng = makeRng(hashStr(seedKey));
 
@@ -215,114 +207,43 @@
     const font = `900 ${fontSize}px ${getComputedStyle(document.body).getPropertyValue("--sans") || "system-ui"}`;
     const mask = buildMask(text, iw, ih, font);
 
-    // ✅ MUCH LOWER density - only outline particles
-    const targetPts = Math.floor((iw*ih) / 400);  // drastically reduced
-    const maxAttempts = targetPts * 20;
+    // ✅ Sample particles directly from text pixels
+    const pts = [];
+    const samplingDensity = 4; // sample every N pixels
 
-    // ✅ MUCH LARGER spacing between particles
-    const minDistEdge = 8.5;  // outline only
-    const minDistCore = 15.0; // very sparse core
-    const cell = minDistEdge;
-    const gw = Math.ceil(iw / cell);
-    const gh = Math.ceil(ih / cell);
-    const grid = new Array(gw*gh).fill(-1);
+    for(let y = 0; y < ih; y += samplingDensity){
+      for(let x = 0; x < iw; x += samplingDensity){
+        const a = alphaAt(mask, x, y, iw, ih);
 
-    function gridIndex(x,y){
-      const gx = Math.floor(x / cell);
-      const gy = Math.floor(y / cell);
-      return gy*gw + gx;
-    }
+        // Only place particle if pixel is part of text
+        if(a > 128){
+          const jitterX = (rng() - 0.5) * samplingDensity * 0.6;
+          const jitterY = (rng() - 0.5) * samplingDensity * 0.6;
 
-    function okDistance(x,y,minD,pts){
-      const gx = Math.floor(x / cell);
-      const gy = Math.floor(y / cell);
-      const r = Math.ceil(minD / cell);
-      for(let yy=Math.max(0,gy-r); yy<=Math.min(gh-1,gy+r); yy++){
-        for(let xx=Math.max(0,gx-r); xx<=Math.min(gw-1,gx+r); xx++){
-          const id = grid[yy*gw+xx];
-          if(id<0) continue;
-          const p = pts[id];
-          const dx=x-p.x, dy=y-p.y;
-          if(dx*dx+dy*dy < minD*minD) return false;
+          pts.push({
+            x: x + pad + jitterX,
+            y: y + pad + jitterY,
+            r0: 1.2 + rng() * 0.8,
+            ph: rng()*Math.PI*2,
+            pulse: 0.005 + rng()*0.010,
+            blob: 1
+          });
         }
       }
-      return true;
-    }
-
-    function radius(rng, isEdge){
-      // ✅ Smaller, more uniform particles
-      const u = rng();
-      const base = isEdge ? 0.8 : 1.0;
-      const span = isEdge ? 1.2 : 1.5;
-      let r = base + (1 - Math.pow(u, 3.5)) * span;
-      if (rng() < 0.03) r *= 1.15;
-      return r;
-    }
-
-    const pts = [];
-    let tries = 0;
-
-    while(pts.length < targetPts && tries < maxAttempts){
-      tries++;
-
-      const x = rng()*iw;
-      const y = rng()*ih;
-
-      const a = alphaAt(mask, x, y, iw, ih);
-      if (a < 28) continue;
-
-      const inside = a/255;
-      const e = edgeScore(mask, x, y, iw, ih);
-
-      // ✅ ONLY edges - completely kill interior
-      const edgeBias = Math.min(1, e*8.0);  // very strong edge detection
-      
-      // Accept ONLY if it's an edge
-      if (edgeBias < 0.4) continue;  // reject non-edges immediately
-      
-      let pKeep = edgeBias * 0.95;  // keep most edges
-      if (inside > 0.85) pKeep *= 0.05;  // almost no interior
-      if (rng() > pKeep) continue;
-
-      const minD = (edgeBias > 0.35) ? minDistEdge : minDistCore;
-      if(!okDistance(x,y,minD,pts)) continue;
-
-      // accept
-      const id = pts.length;
-      pts.push({
-        x: x + pad,
-        y: y + pad,
-        r0: radius(rng, edgeBias > 0.35),
-        ph: rng()*Math.PI*2,
-        pulse: 0.010 + rng()*0.018,
-        blob: 2 + (rng()<0.45 ? 1 : 0)
-      });
-
-      grid[gridIndex(x,y)] = id;
     }
 
     return pts;
   }
 
-  // draw "blob" (2~3 overlapping circles) -> virus-like but readable
-  function drawBlob(ctx, x, y, r, rngVal, blobCount){
-    for(let i=0;i<blobCount;i++){
-      const ang = (i/blobCount)*Math.PI*2 + rngVal*0.8;
-      const rr = r*(0.78 + (i===0?0.35:0.15));
-      const ox = Math.cos(ang) * r*0.28;
-      const oy = Math.sin(ang) * r*0.22;
-      ctx.beginPath();
-      ctx.arc(x+ox, y+oy, rr, 0, Math.PI*2);
-      ctx.fill();
-    }
-  }
-
+  // Simple circle rendering for clear text
   function render(ctx, pts, t, color){
     ctx.fillStyle = color;
     const tt = t*0.001;
     for(const p of pts){
       const rr = p.r0 * (1 + Math.sin(tt*0.55 + p.ph) * p.pulse);
-      drawBlob(ctx, p.x, p.y, rr, p.ph, p.blob);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, rr, 0, Math.PI*2);
+      ctx.fill();
     }
   }
 
