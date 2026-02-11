@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Appropriation Lens — PNG Overlay (Final v2)</title>
+  <title>Appropriation Lens — PNG Overlay (Stable)</title>
   <style>
     :root{
       --bg:#ffffff;
@@ -34,54 +34,52 @@
     }
     .w{ display:inline; position:relative; padding:0 2px; border-radius:10px; }
 
-    /* ✅ PNG가 올라올 때: (1) 글자 숨김 + (2) 해당 영역을 흰색으로 "덮어서" 완전히 가림 */
-    .w.hiddenInk{
-      color: transparent;
-      text-shadow:none;
-    }
+    /* 렌즈 안 매치된 단어: 글자 숨김 + 흰색 덮개로 잔상 제거 */
+    .w.hiddenInk{ color: transparent; text-shadow:none; }
     .w.hiddenInk::before{
       content:"";
       position:absolute;
-      left:-6px; right:-6px;
+      left:-8px; right:-8px;
       top:50%;
-      height: 1.35em;
+      height: 1.45em;
       transform: translateY(-50%);
       background: rgba(255,255,255,1);
-      border-radius: 10px;
-      z-index: 1; /* 텍스트 위에 올라가서 잔상 가림 */
+      border-radius: 12px;
+      z-index: 1;
     }
-    .w.hiddenInk{ z-index: 2; } /* 토큰 자체를 위로 */
+    .w.hiddenInk{ z-index: 2; }
 
-    /* ✅ PNG 오버레이 레이어 */
+    /* PNG 레이어 */
     #pngLayer{
       position: fixed;
       inset: 0;
-      z-index: 9996;        /* 본문 위, 렌즈 아래 */
+      z-index: 9996;
       pointer-events: none;
     }
 
-    /* ✅ 더 “바이러스”처럼: 크고, 심하게 왜곡 + 살아있는 움직임 */
+    /* ✅ 렌즈 안에 있는 동안 "항상 선명" + 깜빡임 방지(캐싱) */
     .pngWord{
       position: absolute;
       transform-origin: left bottom;
-      opacity: 1;
-      filter:
-        drop-shadow(0 18px 34px rgba(0,0,0,.26))
-        drop-shadow(0 0 18px rgba(0,0,0,.10));
-      will-change: transform, left, top, width, height;
+      opacity: 0;                /* 기본은 숨김 */
+      visibility: hidden;
+      pointer-events: none;
       user-select: none;
 
-      /* 발견(팝) + 지속 흔들림(바이러스 생명감) */
-      animation: popIn .16s ease-out, drift 3.2s ease-in-out infinite;
+      will-change: transform, left, top, width, height, opacity;
+      filter: drop-shadow(0 18px 34px rgba(0,0,0,.26));
+      transition: opacity .08s linear; /* 출현만 부드럽게 */
     }
-    @keyframes popIn{
-      from{ transform: translate(0,0) scale(.78) rotate(-3deg) skewX(-2deg); opacity: 0; }
-      to  { transform: translate(0,0) scale(1)   rotate(0deg)  skewX(0deg);  opacity: 1; }
+    .pngWord.on{
+      opacity: 1;
+      visibility: visible;
+      animation: drift 3.2s ease-in-out infinite;
     }
-    /* 더 살아있는 움직임: 살짝 떠다니고, 미세 회전 */
+
+    /* 더 살아있는 움직임 */
     @keyframes drift{
       0%,100%{ transform: translate(var(--dx,0px), var(--dy,0px)) rotate(var(--rot,0deg)) skewX(var(--sk,0deg)); }
-      50%{ transform: translate(calc(var(--dx,0px) + 2px), calc(var(--dy,0px) - 2px)) rotate(calc(var(--rot,0deg) + .9deg)) skewX(calc(var(--sk,0deg) + .8deg)); }
+      50%{ transform: translate(calc(var(--dx,0px) + 3px), calc(var(--dy,0px) - 3px)) rotate(calc(var(--rot,0deg) + 1.2deg)) skewX(calc(var(--sk,0deg) + 1deg)); }
     }
 
     /* 토글 스와치 */
@@ -108,7 +106,7 @@
     #lens{
       position: fixed;
       left: 50%; top: 58%;
-      width: 480px; height: 480px; /* ✅ 렌즈 더 키움 */
+      width: 480px; height: 480px;
       transform: translate(-50%,-50%);
       border-radius: 999px;
       background: rgba(255,255,255,.04);
@@ -170,7 +168,7 @@
   <div class="wrap">
     <header>
       <h1>전유된 대화: 내 욕망으로 번역되는 타자의 목소리</h1>
-      <p>우측 하단 스와치로 렌즈 ON/OFF. 렌즈 안의 특정 단어는 텍스트를 ‘완전히 가리고’ PNG 바이러스 글자로 대체됩니다.</p>
+      <p>렌즈 ON일 때만, 렌즈 안 키워드는 텍스트를 완전히 가리고 PNG 바이러스 글자로 “안정적으로” 나타납니다.</p>
     </header>
     <div id="content"></div>
   </div>
@@ -203,7 +201,7 @@ This is how little by little the forest disappeared from their land.
     const PNG_MAP = [
       { re: /^forest$/i, png: "./asset.png" },
       { re: /^xapiri$/i, png: "./intangible.png" },
-      // 나중에 파일 추가:
+      // 필요시 추가:
       // { re: /^bee(s)?$/i,    png: "./product.png" },
       // { re: /^honey$/i,      png: "./revenue.png" },
       // { re: /^flower(s)?$/i, png: "./input.png" },
@@ -217,6 +215,10 @@ This is how little by little the forest disappeared from their land.
     const pngLayer = document.getElementById("pngLayer");
 
     let lensOn = false;
+
+    // ✅ span -> img 캐시 (삭제하지 않고 재사용)
+    const imgBySpan = new Map();
+    const activeSpanSet = new Set();
 
     function renderTokenized(text){
       const parts = text.split(/([A-Za-z]+(?:'[A-Za-z]+)?)/g);
@@ -244,22 +246,47 @@ This is how little by little the forest disappeared from their land.
       return null;
     }
 
-    function clearPngLayer(){
-      pngLayer.innerHTML = "";
-    }
-
     renderTokenized(TEXT);
     const wordSpans = () => Array.from(content.querySelectorAll(".w"));
 
+    function getOrCreateImgForSpan(span, entry){
+      let img = imgBySpan.get(span);
+      if (img) return img;
+
+      img = document.createElement("img");
+      img.className = "pngWord";
+      img.src = entry.png;
+      img.alt = "";
+      img.draggable = false;
+      img.onerror = () => console.warn("PNG load failed:", entry.png);
+      pngLayer.appendChild(img);
+
+      imgBySpan.set(span, img);
+      return img;
+    }
+
+    // ✅ 깜빡임 방지: requestAnimationFrame으로 업데이트 스로틀
+    let rafPending = false;
+    function scheduleUpdate(){
+      if (!lensOn) return;
+      if (rafPending) return;
+      rafPending = true;
+      requestAnimationFrame(() => {
+        rafPending = false;
+        updateLensEffect();
+      });
+    }
+
     function updateLensEffect(){
       if (!lensOn) return;
-
-      clearPngLayer();
 
       const lr = lens.getBoundingClientRect();
       const cx = lr.left + lr.width / 2;
       const cy = lr.top + lr.height / 2;
       const radius = lr.width / 2;
+
+      // 이번 프레임에서 활성화된 span 추적
+      activeSpanSet.clear();
 
       for (const sp of wordSpans()){
         const r = sp.getBoundingClientRect();
@@ -273,16 +300,12 @@ This is how little by little the forest disappeared from their land.
           const entry = lookupPng(orig);
           if (entry){
             sp.classList.add("hiddenInk");
+            activeSpanSet.add(sp);
 
-            const img = document.createElement("img");
-            img.className = "pngWord";
-            img.src = entry.png;
-            img.alt = "";
-            img.draggable = false;
+            const img = getOrCreateImgForSpan(sp, entry);
+            img.classList.add("on");
 
-            img.onerror = () => console.warn("PNG load failed:", entry.png);
-
-            // ✅ 더 크게: 기본 2.85배 + 짧은 단어는 더 부스트 (최대 3.35)
+            // ✅ 더 크게 (최대 3.35) + 단어 길이 보정
             const len = orig.length;
             const base = 2.85;
             const boost = Math.max(0, 9 - len) * 0.08;
@@ -293,29 +316,35 @@ This is how little by little the forest disappeared from their land.
             img.style.width  = (r.width * scale) + "px";
             img.style.height = (r.height * scale) + "px";
 
-            // ✅ 완전히 덮어쓰는 배치(더 위/더 왼쪽)
+            // ✅ 덮어쓰기 위치(위/왼쪽)
             const dx = -r.width  * (scale - 1) * 0.32;
             const dy = -r.height * (scale - 1) * 0.78;
 
-            // ✅ 왜곡 더 강하게 (회전/스큐 + 개인별 미세 이동값을 CSS 변수로)
-            const rot = (Math.random() * 2 - 1) * 3.6;    // -3.6 ~ 3.6deg
-            const skew = (Math.random() * 2 - 1) * 3.0;   // -3.0 ~ 3.0deg
-            const driftX = (Math.random() * 2 - 1) * 2.0; // -2 ~ 2px
-            const driftY = (Math.random() * 2 - 1) * 2.0; // -2 ~ 2px
+            // ✅ 각 이미지마다 고유 왜곡/움직임 값(한 번 정하면 유지)
+            if (!img.dataset.seeded){
+              const rot = (Math.random() * 2 - 1) * 3.6;
+              const skew = (Math.random() * 2 - 1) * 3.0;
+              img.style.setProperty("--rot", rot + "deg");
+              img.style.setProperty("--sk", skew + "deg");
+              img.dataset.seeded = "1";
+            }
 
+            // 위치는 매 프레임 업데이트(스크롤/드래그 대응)
             img.style.setProperty("--dx", dx + "px");
             img.style.setProperty("--dy", dy + "px");
-            img.style.setProperty("--rot", rot + "deg");
-            img.style.setProperty("--sk", skew + "deg");
 
-            // 애니메이션이 transform을 쓰기 때문에, 초기 위치는 CSS 변수로 처리
-            // drift keyframes에서 var(--dx/--dy/--rot/--sk)로 움직임
-            pngLayer.appendChild(img);
           } else {
             sp.classList.remove("hiddenInk");
           }
         } else {
           sp.classList.remove("hiddenInk");
+        }
+      }
+
+      // ✅ 활성화되지 않은(렌즈 밖) img는 숨김만(삭제 X)
+      for (const [sp, img] of imgBySpan.entries()){
+        if (!activeSpanSet.has(sp)){
+          img.classList.remove("on");
         }
       }
     }
@@ -325,14 +354,12 @@ This is how little by little the forest disappeared from their land.
       document.body.classList.toggle("lensOn", on);
       hint.textContent = on ? "Lens: ON (drag)" : "Lens: OFF";
 
-      clearPngLayer();
-
       if (!on){
-        for (const sp of wordSpans()){
-          sp.classList.remove("hiddenInk");
-        }
+        // 텍스트 복구 + 이미지 전부 숨김
+        for (const sp of wordSpans()) sp.classList.remove("hiddenInk");
+        for (const img of imgBySpan.values()) img.classList.remove("on");
       } else {
-        updateLensEffect();
+        scheduleUpdate();
       }
     }
 
@@ -350,7 +377,7 @@ This is how little by little the forest disappeared from their land.
       lens.style.left = x + "px";
       lens.style.top  = y + "px";
       lens.style.transform = "translate(0,0)";
-      updateLensEffect();
+      scheduleUpdate();
     }
 
     lens.addEventListener("pointerdown", (e) => {
@@ -372,8 +399,8 @@ This is how little by little the forest disappeared from their land.
       try { lens.releasePointerCapture(e.pointerId); } catch {}
     });
 
-    window.addEventListener("scroll", () => updateLensEffect(), { passive:true });
-    window.addEventListener("resize", () => updateLensEffect());
+    window.addEventListener("scroll", () => scheduleUpdate(), { passive:true });
+    window.addEventListener("resize", () => scheduleUpdate());
   </script>
 </body>
 </html>
