@@ -30,7 +30,7 @@
       z-index:2;
     }
 
-    /* ✅ micro motion (readability-safe, and robust var parsing) */
+    /* ✅ micro motion for ORIGINAL words only */
     .w{
       display:inline-block;
       padding:0 .06em;
@@ -43,7 +43,8 @@
       animation-iteration-count: infinite;
       animation-delay: var(--mfDelay, 0s);
     }
-    .w.hideInk{ color:transparent; animation: none; }
+    /* ✅ when discovered, original ink is hidden and motion stops */
+    .w.hideInk{ color:transparent; animation:none; }
 
     @keyframes microFloat{
       0%   { transform: translate3d(0,0,0) rotate(0deg); }
@@ -192,12 +193,12 @@
     sp.className="w";
     sp.textContent=w;
 
-    // ✅ readability-safe micro motion params (now slightly more noticeable)
-    const dur = 6.2 + Math.random()*4.2;      // 6.2s ~ 10.4s
-    const delay = -(Math.random()*6.0);       // negative for desync
-    const mx = (Math.random()*1.4 - 0.70);    // -0.70px ~ 0.70px
-    const my = (Math.random()*1.2 - 0.60);    // -0.60px ~ 0.60px
-    const mr = (Math.random()*0.20 - 0.10);   // -0.10deg ~ 0.10deg
+    // ✅ micro motion params (original words only)
+    const dur = 6.2 + Math.random()*4.2;
+    const delay = -(Math.random()*6.0);
+    const mx = (Math.random()*1.4 - 0.70);
+    const my = (Math.random()*1.2 - 0.60);
+    const mr = (Math.random()*0.20 - 0.10);
     sp.style.setProperty("--mfDur", dur.toFixed(2)+"s");
     sp.style.setProperty("--mfDelay", delay.toFixed(2)+"s");
     sp.style.setProperty("--mx", mx.toFixed(2)+"px");
@@ -303,12 +304,10 @@
             y: yy + jitterY,
             r0: 1.6 + rng()*0.9,
             ph: rng()*Math.PI*2,
-            pulse: 0.005 + rng()*0.010,
-
-            // ✅ VERY subtle drift - barely noticeable
-            ax: 0.10 + rng()*0.08,   // 0.10~0.18px max drift
-            ay: 0.08 + rng()*0.06,   // 0.08~0.14px max drift
-            spd: 0.25 + rng()*0.20   // very slow speed
+            pulse: 0.005 + rng()*0.010,  // (will be disabled when frozen)
+            ax: 0.22 + rng()*0.18,        // (will be disabled when frozen)
+            ay: 0.20 + rng()*0.16,
+            spd: 0.55 + rng()*0.55
           });
         }
       }
@@ -316,15 +315,18 @@
     return { pts, w, h };
   }
 
-  function render(ctx, pts, t, color){
+  /* ✅ render supports "freeze" (discovered words should NOT move) */
+  function render(ctx, pts, t, color, freeze){
     ctx.fillStyle = color;
     const tt = t*0.001;
     for(const p of pts){
-      // ✅ very subtle micro drift
-      const ox = Math.sin(tt*(0.70*p.spd) + p.ph) * p.ax;
-      const oy = Math.cos(tt*(0.65*p.spd) + p.ph) * p.ay;
+      const ox = freeze ? 0 : Math.sin(tt*(0.85*p.spd) + p.ph) * p.ax;
+      const oy = freeze ? 0 : Math.cos(tt*(0.78*p.spd) + p.ph) * p.ay;
 
-      const rr = p.r0 * (1 + Math.sin(tt*0.55 + p.ph) * p.pulse);
+      const rr = freeze
+        ? p.r0
+        : (p.r0 * (1 + Math.sin(tt*0.55 + p.ph) * p.pulse));
+
       ctx.beginPath();
       ctx.arc(p.x + ox, p.y + oy, rr, 0, Math.PI*2);
       ctx.fill();
@@ -353,7 +355,8 @@
       prog: 0,
       data: null,
       lastTW: 0,
-      lastTH: 0
+      lastTH: 0,
+      freeze: true  // ✅ discovered words: frozen like your reference video
     };
     infected.set(key, obj);
     if (!infectionStart) infectionStart = performance.now();
@@ -408,12 +411,12 @@
       if(sp.dataset.hit!=="1") continue;
       if(isHit(sp, lensInfo)){
         const obj=ensureInfected(sp);
-        sp.classList.add("hideInk");
+        sp.classList.add("hideInk");      // stops motion + hides ink
         obj.canvas.classList.add("on");
       }
     }
 
-    // render infected canvases
+    // render infected canvases (FROZEN)
     for(const obj of infected.values()){
       obj.prog = clamp01(Math.max(obj.prog, (now-obj.startedAt)/6500));
 
@@ -450,7 +453,7 @@
       ctx.translate(dx, dy);
 
       const isFinal = document.body.classList.contains("final");
-      render(ctx, obj.data.pts, t, isFinal ? "#ffffff" : "#111111");
+      render(ctx, obj.data.pts, t, isFinal ? "#ffffff" : "#111111", obj.freeze);
       ctx.restore();
     }
 
